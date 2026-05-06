@@ -4,7 +4,7 @@
   // ==================================================
   "search_settings": {
     "search_days": 7,
-    "max_results": 100,
+    "max_results": 200,
     "max_results_per_source": {}
   },
 
@@ -14,7 +14,10 @@
   "data_sources": {
     "enabled": [
       "arxiv",
-      "prl"
+      "prl",
+      "prd",
+      "nature",
+      "science"
     ],
     "journals": [],
     "reports_by_source": true
@@ -25,7 +28,7 @@
   // ==================================================
   "target_domains": {
     "domains": [
-      "quant-ph"
+      "astro-ph.HE"
     ]
   },
 
@@ -35,7 +38,13 @@
   "keywords": {
     "primary_keywords": {
       "weight": 1.0,
-      "keywords": []
+      "keywords": [
+        "Observation",
+        "gamma-ray",
+        "cosmic-ray",
+        "neutrino",
+        "dark matter"
+      ]
     },
     "enable_reference_extraction": true,
     "reference_keywords_config": {
@@ -129,7 +138,7 @@
     "top_n": 5,
     "channels": {
       "email": {
-        "enabled": false
+        "enabled": true
       },
       "wechat_work": {
         "enabled": true
@@ -171,7 +180,7 @@
   // ==================================================
   "concurrency": {
     "enabled": true,
-    "workers": 2
+    "workers": 1
   },
 
   // ==================================================
