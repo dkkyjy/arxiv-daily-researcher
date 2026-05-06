@@ -134,8 +134,9 @@
     "enabled": true,
     "on_success": true,
     "on_failure": true,
-    "attach_reports": false,
+    
     "top_n": 5,
+    "attach_reports": true,
     "channels": {
       "email": {
         "enabled": true

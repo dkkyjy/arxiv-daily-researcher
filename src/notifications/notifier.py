@@ -782,12 +782,16 @@ class NotifierAgent:
         )
 
     def _collect_attachments(self, result: RunResult) -> List[Path]:
-        """收集报告文件作为邮件附件"""
+        """收集报告文件（HTML + Markdown）作为邮件附件"""
         attachments = []
         for source, path_str in result.report_paths.items():
             path = Path(path_str)
             if path.exists() and path.is_file():
                 attachments.append(path)
+            # 同时查找对应的 Markdown 报告
+            md_path = Path(str(path).replace("/html/", "/markdown/").replace(".html", ".md"))
+            if md_path.exists() and md_path.is_file():
+                attachments.append(md_path)
         return attachments
 
     # ------------------------------------------------------------------
