@@ -792,7 +792,8 @@ class NotifierAgent:
             md_path = Path(str(path).replace("/html/", "/markdown/").replace(".html", ".md"))
             if md_path.exists() and md_path.is_file():
                 attachments.append(md_path)
-        return attachments
+        # 去重（保持顺序）
+        return list(dict.fromkeys(attachments))
 
     # ------------------------------------------------------------------
     # 研究趋势通知格式化
@@ -918,4 +919,5 @@ class NotifierAgent:
             path = Path(path_str)
             if path.exists() and path.is_file():
                 attachments.append(path)
-        return attachments
+        # 去重（保持顺序）
+        return list(dict.fromkeys(attachments))

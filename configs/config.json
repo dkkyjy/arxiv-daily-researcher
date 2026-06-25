@@ -39,7 +39,7 @@
     "primary_keywords": {
       "weight": 1.0,
       "keywords": [
-        "Observation",
+        "Astroparticle Physics",
         "gamma-ray",
         "cosmic-ray",
         "neutrino",
@@ -181,7 +181,7 @@
   // ==================================================
   "concurrency": {
     "enabled": true,
-    "workers": 1
+    "workers": 4
   },
 
   // ==================================================
