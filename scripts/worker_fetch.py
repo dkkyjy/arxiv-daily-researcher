@@ -110,13 +110,21 @@ def run_fetch(dry_run=False, days=7):
     scored_papers_by_source = {}
     for source, papers in papers_by_source.items():
         scored_papers = []
+        llm_semaphore = threading.Semaphore(min(settings.CONCURRENCY_WORKERS, 3))
         with ThreadPoolExecutor(max_workers=settings.CONCURRENCY_WORKERS) as executor:
-            futures = {
-                executor.submit(
+            def _submit_with_semaphore(paper):
+                llm_semaphore.acquire()
+                def _release(*args, **kwargs):
+                    llm_semaphore.release()
+                fut = executor.submit(
                     _score_single_paper,
                     paper, source, analysis_agent, all_keywords,
                     translation_cache, cache_lock, None, search_agent,
-                ): paper
+                )
+                fut.add_done_callback(_release)
+                return fut
+            futures = {
+                _submit_with_semaphore(paper): paper
                 for paper in papers
             }
             for future in tqdm(as_completed(futures), total=len(futures), desc=f"  评分 [{source}]"):

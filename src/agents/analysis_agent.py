@@ -80,11 +80,16 @@ class AnalysisAgent:
 
     def __init__(self):
         # 初始化两个不同性能LLM客户端
+        # 增加显式timeout防止并发stream timeout
         self.cheap_client = OpenAI(
-            api_key=settings.CHEAP_LLM.api_key, base_url=settings.CHEAP_LLM.base_url
+            api_key=settings.CHEAP_LLM.api_key, base_url=settings.CHEAP_LLM.base_url,
+            timeout=120.0,
+            max_retries=0,  # 由tenacity统一管理重试
         )
         self.smart_client = OpenAI(
-            api_key=settings.SMART_LLM.api_key, base_url=settings.SMART_LLM.base_url
+            api_key=settings.SMART_LLM.api_key, base_url=settings.SMART_LLM.base_url,
+            timeout=120.0,
+            max_retries=0,
         )
 
         # 初始化 MinerU PDF 解析器
@@ -115,6 +120,8 @@ class AnalysisAgent:
                     messages=[{"role": "user", "content": prompt}],
                     temperature=settings.CHEAP_LLM.temperature,
                     response_format={"type": "json_object"},
+                    stream=False,
+                    timeout=120,
                 )
             except Exception:
                 if settings.TOKEN_TRACKING_ENABLED:
@@ -150,6 +157,8 @@ class AnalysisAgent:
                     model=settings.CHEAP_LLM.model_name,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.3,
+                    stream=False,
+                    timeout=120,
                 )
             except Exception:
                 if settings.TOKEN_TRACKING_ENABLED:
@@ -186,6 +195,8 @@ class AnalysisAgent:
                     messages=[{"role": "user", "content": prompt}],
                     temperature=settings.SMART_LLM.temperature,
                     response_format={"type": "json_object"},
+                    stream=False,
+                    timeout=120,
                 )
             except Exception:
                 if settings.TOKEN_TRACKING_ENABLED:

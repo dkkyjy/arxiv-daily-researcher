@@ -219,14 +219,22 @@ class TrendResearchPipeline:
         return tldrs
 
     def _generate_tldrs_concurrent(self, agent: TrendAgent, papers: list) -> Dict[str, str]:
-        """并发生成 TLDR"""
+        """并发生成 TLDR，使用 Semaphore 控制 LLM 并发数防止 timeout"""
         tldrs = {}
         workers = min(self.settings.CONCURRENCY_WORKERS, self.settings.RESEARCH_TLDR_BATCH_SIZE)
         logger.info(f"  使用并发模式 (workers={workers})")
 
+        llm_semaphore = threading.Semaphore(min(workers, 3))
         with tqdm(total=len(papers), desc="📝 生成 TLDR", unit="篇", ncols=100) as pbar:
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(agent.generate_tldr, paper): paper for paper in papers}
+                def _submit_tldr(paper):
+                    llm_semaphore.acquire()
+                    def _release(*args, **kwargs):
+                        llm_semaphore.release()
+                    fut = executor.submit(agent.generate_tldr, paper)
+                    fut.add_done_callback(_release)
+                    return fut
+                futures = {_submit_tldr(paper): paper for paper in papers}
                 for future in as_completed(futures):
                     paper = futures[future]
                     try:

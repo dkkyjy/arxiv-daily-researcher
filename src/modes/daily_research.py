@@ -267,14 +267,19 @@ class DailyResearchPipeline:
 
                 if settings.ENABLE_CONCURRENCY and len(papers) > 1:
                     logger.info(f"    使用并发模式 (workers={settings.CONCURRENCY_WORKERS})")
+                    # 用 Semaphore 限制同时进行的 LLM API 调用数，防止 stream timeout
+                    llm_semaphore = threading.Semaphore(min(settings.CONCURRENCY_WORKERS, 3))
                     with tqdm(
                         total=len(papers), desc=f"📊 [{source}] 评分", unit="篇", ncols=100
                     ) as pbar:
                         with ThreadPoolExecutor(
                             max_workers=settings.CONCURRENCY_WORKERS
                         ) as executor:
-                            futures = {
-                                executor.submit(
+                            def _submit_with_semaphore(paper):
+                                llm_semaphore.acquire()
+                                def _release(*args, **kwargs):
+                                    llm_semaphore.release()
+                                fut = executor.submit(
                                     _score_single_paper,
                                     paper,
                                     source,
@@ -284,7 +289,11 @@ class DailyResearchPipeline:
                                     cache_lock,
                                     keyword_tracker,
                                     search_agent,
-                                ): paper
+                                )
+                                fut.add_done_callback(_release)
+                                return fut
+                            futures = {
+                                _submit_with_semaphore(paper): paper
                                 for paper in papers
                             }
                             for future in as_completed(futures):
@@ -356,6 +365,8 @@ class DailyResearchPipeline:
 
                 if settings.ENABLE_CONCURRENCY and len(papers_with_pdf) > 1:
                     logger.info(f"    使用并发模式 (workers={settings.CONCURRENCY_WORKERS})")
+                    # 深度分析也是LLM调用密集操作，加 Semaphore 限流
+                    deep_semaphore = threading.Semaphore(min(settings.CONCURRENCY_WORKERS, 2))
                     with tqdm(
                         total=len(papers_with_pdf),
                         desc=f"🔬 [{source}] 深度分析",
@@ -365,10 +376,17 @@ class DailyResearchPipeline:
                         with ThreadPoolExecutor(
                             max_workers=settings.CONCURRENCY_WORKERS
                         ) as executor:
-                            futures = {
-                                executor.submit(
+                            def _submit_deep_with_semaphore(paper_info):
+                                deep_semaphore.acquire()
+                                def _release(*args, **kwargs):
+                                    deep_semaphore.release()
+                                fut = executor.submit(
                                     _deep_analyze_single_paper, paper_info, analysis_agent
-                                ): paper_info
+                                )
+                                fut.add_done_callback(_release)
+                                return fut
+                            futures = {
+                                _submit_deep_with_semaphore(paper_info): paper_info
                                 for paper_info in papers_with_pdf
                             }
                             for future in as_completed(futures):
