@@ -115,7 +115,7 @@ class VersionedStaticFiles(StaticFiles):
         return response
 
 
-_SHELL_ASSET_NAMES = ("app.css", "app.js", "icon.svg", "favicon-32.png")
+_SHELL_ASSET_NAMES = ("app.css", "ac-theme.css", "app.js", "icon.svg", "favicon-32.png")
 _SHELL_CACHE_LOCK = threading.Lock()
 _SHELL_CACHE: tuple[tuple[Any, ...], str] | None = None
 

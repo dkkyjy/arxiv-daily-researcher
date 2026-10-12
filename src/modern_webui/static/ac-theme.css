@@ -1,0 +1,197 @@
+/* ============================================================
+   Animal Crossing skin for the modern WebUI
+   ------------------------------------------------------------
+   Additive overlay loaded AFTER app.css. Remaps the app's CSS
+   design tokens onto Animal Crossing design tokens (ported from
+   ac-site-template) plus a few targeted overrides (font, sidebar,
+   3D press-down buttons). Light "day" and dark "night" both mapped.
+   ============================================================ */
+
+@font-face {
+  font-family: "AC Latin";
+  src: url("/assets/nunito-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── AC design tokens ─────────────────────────────────────── */
+:root {
+  --ac-primary: #2abaaa;
+  --ac-primary-light: #6dd5c8;
+  --ac-primary-dark: #1f9489;
+
+  --ac-cream: #f7f3e7;
+  --ac-cream-dark: #ece6d4;
+  --ac-sand: #ddd6c0;
+  --ac-wood: #c4a46c;
+
+  --ac-text: #877358;
+  --ac-text-light: #a69580;
+  --ac-text-dark: #6b5c48;
+
+  --ac-green: #8bc34a;
+  --ac-green-light: #c5e1a5;
+  --ac-pink: #f48fb1;
+  --ac-yellow: #ffd968;
+  --ac-orange: #ffb74d;
+  --ac-red: #ef5350;
+
+  --ac-surface: #ffffff;
+  --ac-surface-hover: #faf7ef;
+  --ac-border: #ddd6c0;
+
+  --ac-font:
+    "AC Latin", "Nunito Variable", "M PLUS Rounded 1c", "LXGW WenKai Screen",
+    "HarmonyOS Sans SC", "PingFang SC", "Hiragino Maru Gothic ProN",
+    "Microsoft YaHei", "Noto Sans CJK SC", Inter, ui-sans-serif, system-ui,
+    -apple-system, sans-serif;
+}
+
+/* ── Remap light ("day") tokens ───────────────────────────── */
+:root,
+:root[data-theme="blue"] {
+  --bg: var(--ac-cream);
+  --canvas: var(--ac-cream);
+  --card: var(--ac-surface);
+  --card-soft: var(--ac-surface-hover);
+
+  --text: var(--ac-text-dark);
+  --text-secondary: var(--ac-text);
+  --muted: var(--ac-text-light);
+  --muted-light: #bdb3a0;
+
+  --line: var(--ac-border);
+  --line-strong: #cfc6ad;
+  --soft: var(--ac-cream-dark);
+
+  --brand: var(--ac-primary);
+  --brand-strong: var(--ac-primary-dark);
+  --brand-deep: #17776e;
+  --brand-soft: #e6f9f6;
+  --brand-line: #b9e8e2;
+  --brand-ring: rgba(42, 186, 170, 0.18);
+  --brand-focus: var(--ac-primary-light);
+
+  --accent: var(--ac-primary-dark);
+  --chip-separator: #cfe8e2;
+
+  --blue: #5c88a6;
+  --blue-soft: #e5eff5;
+  --blue-line: #c9dde9;
+  --yellow: #c79a1e;
+  --yellow-soft: #fdf6dd;
+  --yellow-line: #ecdcae;
+  --success: #6fba2c;
+  --success-soft: #eef7e0;
+  --danger: #d9644a;
+  --danger-soft: #fdecea;
+  --warning: #dba90e;
+
+  --control-radius: 14px;
+  --shadow-xs: 0 1px 2px rgba(135, 115, 88, 0.1);
+  --shadow-sm: 0 2px 8px rgba(135, 115, 88, 0.12);
+  --shadow-md: 0 6px 22px rgba(135, 115, 88, 0.18);
+}
+
+/* ── Remap dark ("night") tokens ──────────────────────────── */
+:root[data-theme$="dark"] {
+  --bg: #374063;
+  --canvas: #374063;
+  --card: #2d3554;
+  --card-soft: #4a5580;
+
+  --text: #f0e8dc;
+  --text-secondary: #e2d6c8;
+  --muted: #b8ad9e;
+  --muted-light: #9a917f;
+
+  --line: #4a5580;
+  --line-strong: #5a6590;
+  --soft: #38446b;
+
+  --brand: #2abaaa;
+  --brand-strong: #5dd4c8;
+  --brand-deep: #8fe6dd;
+  --brand-soft: #2f4a63;
+  --brand-line: #3a6b66;
+  --brand-ring: rgba(42, 186, 170, 0.28);
+  --brand-focus: #5dd4c8;
+
+  --accent: #5dd4c8;
+  --chip-separator: #4a5580;
+
+  --success: #86c94a;
+  --success-soft: #33452b;
+  --danger: #ef7a64;
+  --danger-soft: #452f2b;
+  --warning: #e6bd52;
+
+  --control-radius: 14px;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.32);
+  --shadow-md: 0 8px 26px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Font + global feel ───────────────────────────────────── */
+body,
+button,
+input,
+textarea,
+select,
+summary {
+  font-family: var(--ac-font);
+}
+
+/* ── Sidebar: warm AC panel ───────────────────────────────── */
+:root .sidebar {
+  background: var(--ac-cream-dark);
+  border-right: 2px solid var(--ac-border);
+}
+:root[data-theme$="dark"] .sidebar {
+  background: linear-gradient(180deg, #2d3554 0%, #374063 100%);
+  border-right: 2px solid var(--line);
+}
+
+/* ── Primary button: AC 3D press-down ─────────────────────── */
+.primary-button {
+  border: 3px solid var(--ac-primary-dark);
+  background: var(--ac-primary);
+  border-radius: var(--ac-radius-md, 14px);
+  box-shadow: 0 4px 0 var(--ac-primary-dark);
+}
+.primary-button:hover:not(:disabled) {
+  background: var(--ac-primary-light);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 var(--ac-primary-dark);
+}
+.primary-button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ac-primary-dark);
+}
+:root[data-theme$="dark"] .primary-button {
+  border-color: var(--ac-primary-dark);
+  background: var(--ac-primary);
+  box-shadow: 0 4px 0 var(--ac-primary-dark);
+}
+
+/* ── Secondary button: soft AC surface ────────────────────── */
+.secondary-button {
+  border-radius: 14px;
+}
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+}
+
+/* ── Scrollbar in AC sand tone ────────────────────────────── */
+::-webkit-scrollbar-thumb {
+  background: var(--ac-sand);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ac-wood);
+}
+:root[data-theme$="dark"] ::-webkit-scrollbar-thumb {
+  background: #5a6590;
+}
