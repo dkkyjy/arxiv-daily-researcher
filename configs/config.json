@@ -16,8 +16,11 @@
       "arxiv",
       "prl",
       "prd",
+      "jcap",
       "nature",
-      "science"
+      "nature_astronomy",
+      "science",
+      "science_bulletin"
     ],
     "journals": [],
     "reports_by_source": true
@@ -28,7 +31,8 @@
   // ==================================================
   "target_domains": {
     "domains": [
-      "astro-ph.HE"
+      "astro-ph.HE",
+      "astro-ph.IM",
     ]
   },
 
@@ -181,7 +185,7 @@
   // ==================================================
   "concurrency": {
     "enabled": true,
-    "workers": 4
+    "workers": 2
   },
 
   // ==================================================
