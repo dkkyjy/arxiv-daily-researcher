@@ -202,7 +202,11 @@ Execute `omx setup` to install all components. Execute `omx doctor` to verify in
 
 ### 项目简介
 多数据源学术论文监控、筛选、深度分析与报告系统。
-4个数据源（arxiv/prl/prd/nature）、关键词权重评分、LLM七维度分析、中文翻译、Markdown/HTML报告、邮件通知。
+- 数据源：ArXiv + 期刊（PRL / PRD / JCAP / Nature / Nature Astronomy / Science / Science Bulletin，可在 `configs/config.json` 扩展）
+- 流程：关键词权重评分 → 动态及格线筛选 → LLM 七维深度分析 → 中文翻译
+- 输出：Markdown / HTML 报告 + 机器可读 `manifest.json`（契约 schema v1.0）
+- 通知：邮件 / 企业微信 / 钉钉 / Telegram / Slack / 通用 Webhook
+- WebUI：Streamlit 配置面板 + 动森主题「日报浏览」
 
 ### Worker 分工（for omx team）
 
@@ -236,6 +240,23 @@ venv/bin/python scripts/omx_worker.py worker-report
 # omx team 3:worker "在arxiv-daily-researcher中，串行执行worker-fetch → worker-analyze → worker-report"
 ```
 
+### 报告输出与 manifest 契约
+- 报告根目录：`data/reports/daily_research/{markdown,html,manifest}/{source}/`
+- 每次每日运行按数据源额外产出 `manifest/{source}/{SOURCE}_Report_{ts}.json`
+- Schema 与消费方对齐见 `docs/reports_manifest.md`（下游 research-assistant 已对接）
+- manifest 仅含「统计 + 论文摘要」（高分/及格论文附 TLDR + 原文 abstract）；评分明细、评分理由、中文翻译、深析七维仍只在 MD/HTML 中
+- 写失败只记 warning，不影响报告与通知
+
+### WebUI（Streamlit）
+```bash
+# 本地
+streamlit run src/webui/config_panel.py            # http://localhost:8501
+# Docker
+# docker compose -f docker/docker-compose.yml --profile webui up -d config-panel
+```
+Tab：报告查看 / 日报浏览 / LLM / 搜索与数据源 / 关键词 / 评分 / 通知 / 高级设置。
+日报浏览与报告预览均使用注入式动森主题（不改产物文件）。
+
 ### 常用命令
 ```bash
 # 完整每日研究（单进程）
@@ -252,4 +273,5 @@ venv/bin/python main.py --mode trend_research --keywords "quantum error correcti
 - venv/bin/python
 - 配置文件: configs/config.json
 - 数据目录: data/
+- 报告: data/reports/daily_research/ (markdown / html / manifest)
 <!-- OMX:AGENTS-INIT:MANUAL:END -->
