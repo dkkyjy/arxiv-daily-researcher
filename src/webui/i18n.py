@@ -456,6 +456,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "reports_empty_type": {"zh": "暂无报告", "en": "No reports"},
     "reports_count_unit": {"zh": "份", "en": "reports"},
     "reports_preview_btn": {"zh": "▶ 预览", "en": "▶ Preview"},
+    "reports_preview_title": {"zh": "预览", "en": "Preview"},
+    "report_download": {"zh": "下载 HTML", "en": "Download HTML"},
     "reports_dir_label": {"zh": "报告目录", "en": "Reports directory"},
     "rtype_daily": {"zh": "每日研究", "en": "Daily Research"},
     "rtype_trend": {"zh": "趋势分析", "en": "Trend Analysis"},
@@ -467,6 +469,34 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "reports_mtime": {"zh": "生成时间", "en": "Generated"},
     "reports_height": {"zh": "预览高度", "en": "Preview Height"},
     "reports_load_error": {"zh": "报告加载失败", "en": "Failed to load report"},
+    # ── daily_view.py ─────────────────────────────────────────────────────
+    "tab_daily": {"zh": "日报浏览", "en": "Daily Reports"},
+    "daily_title": {"zh": "日报浏览", "en": "Daily Report Viewer"},
+    "daily_hint": {
+        "zh": "按数据源与日期浏览已生成的研究报告全文，页面已套用动森主题。",
+        "en": "Browse generated daily reports by source and date. The viewer applies the Animal Crossing theme.",
+    },
+    "daily_refresh": {"zh": "刷新列表", "en": "Refresh List"},
+    "daily_empty": {
+        "zh": "data/reports/daily_research/ 下暂无日报，请先运行一次每日研究任务。",
+        "en": "No daily reports found in data/reports/daily_research/. Run a daily research task first.",
+    },
+    "daily_source": {"zh": "数据源", "en": "Source"},
+    "daily_all_sources": {"zh": "全部", "en": "All"},
+    "daily_report": {"zh": "报告", "en": "Report"},
+    "daily_no_html": {
+        "zh": "该报告没有对应的 HTML 文件，无法预览。",
+        "en": "This report has no HTML file to preview.",
+    },
+    "daily_download": {"zh": "下载 HTML", "en": "Download HTML"},
+    "daily_generated": {"zh": "生成时间", "en": "Generated"},
+    "daily_keywords": {"zh": "关键词", "en": "Keywords"},
+    "daily_passing": {"zh": "及格分", "en": "Passing score"},
+    "daily_fetched": {"zh": "总抓取", "en": "Fetched"},
+    "daily_passed": {"zh": "及格论文", "en": "Passed"},
+    "daily_deep": {"zh": "深度分析", "en": "Deep Analyzed"},
+    "daily_pass_rate": {"zh": "及格率", "en": "Pass Rate"},
+    "daily_tokens": {"zh": "Token", "en": "Tokens"},
 }
 
 

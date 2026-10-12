@@ -59,6 +59,12 @@ JOURNAL_ISSN_MAP = {
         "issn": ["0034-6861", "1539-0756"],
         "display_name": "RMP",
     },
+    # 宇宙学 / 天体粒子物理
+    "jcap": {
+        "full_name": "Journal of Cosmology and Astroparticle Physics",
+        "issn": ["1475-7508", "1475-7516"],
+        "display_name": "JCAP",
+    },
     # Nature 系列
     "nature": {"full_name": "Nature", "issn": ["0028-0836", "1476-4687"], "display_name": "Nature"},
     "nature_physics": {
@@ -71,6 +77,11 @@ JOURNAL_ISSN_MAP = {
         "issn": ["2041-1723"],
         "display_name": "Nat. Commun.",
     },
+    "nature_astronomy": {
+        "full_name": "Nature Astronomy",
+        "issn": ["2397-3366"],
+        "display_name": "Nat. Astron.",
+    },
     # Science 系列
     "science": {
         "full_name": "Science",
@@ -81,6 +92,11 @@ JOURNAL_ISSN_MAP = {
         "full_name": "Science Advances",
         "issn": ["2375-2548"],
         "display_name": "Sci. Adv.",
+    },
+    "science_bulletin": {
+        "full_name": "Science Bulletin",
+        "issn": ["2095-9273", "2095-9281"],
+        "display_name": "Sci. Bull.",
     },
     # 其他重要期刊
     "npj_quantum_information": {

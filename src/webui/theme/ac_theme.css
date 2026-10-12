@@ -1,0 +1,297 @@
+/* ============================================================
+   Animal Crossing theme overlay for Daily Research reports
+   ------------------------------------------------------------
+   Purpose : injected at preview time into the embedded report HTML.
+   Strategy: remap the report's own CSS variables to AC design tokens,
+             then patch the few hard-coded values.
+   Source  : design tokens ported from ac-site-template/src/styles/global.css
+   Scope   : light ("day") theme only.
+   ============================================================ */
+
+/* ── AC design tokens ─────────────────────────────────────── */
+:root {
+  --ac-primary: #2abaaa;
+  --ac-primary-light: #6dd5c8;
+  --ac-primary-dark: #1f9489;
+
+  --ac-cream: #f7f3e7;
+  --ac-cream-dark: #ece6d4;
+  --ac-sand: #ddd6c0;
+  --ac-wood: #c4a46c;
+
+  --ac-text: #877358;
+  --ac-text-light: #a69580;
+  --ac-text-dark: #6b5c48;
+  --ac-text-white: #ffffff;
+
+  --ac-green: #8bc34a;
+  --ac-green-light: #c5e1a5;
+  --ac-pink: #f48fb1;
+  --ac-yellow: #fff176;
+  --ac-orange: #ffb74d;
+  --ac-red: #ef5350;
+
+  --ac-bg: #f7f3e7;
+  --ac-surface: #ffffff;
+  --ac-surface-hover: #faf7ef;
+  --ac-border: #ddd6c0;
+
+  --ac-shadow: 0 2px 8px rgba(135, 115, 88, 0.12);
+  --ac-shadow-hover: 0 4px 16px rgba(135, 115, 88, 0.2);
+
+  --ac-radius-sm: 10px;
+  --ac-radius-md: 14px;
+  --ac-radius-lg: 20px;
+  --ac-radius-xl: 28px;
+  --ac-radius-full: 9999px;
+
+  /* Latin/numbers → Nunito (inlined as "AC Latin"), CJK → system rounded fallbacks */
+  --ac-font:
+    "AC Latin", "Nunito Variable", "M PLUS Rounded 1c", "LXGW WenKai Screen",
+    "HarmonyOS Sans SC", "PingFang SC", "Hiragino Maru Gothic ProN",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+/* ── Remap the report palette onto AC tokens ──────────────── */
+:root {
+  --color-bg: var(--ac-cream);
+  --color-surface: var(--ac-surface);
+  --color-border: var(--ac-border);
+  --color-primary: var(--ac-primary);
+  --color-primary-dk: var(--ac-primary-dark);
+  --color-pass: var(--ac-green);
+  --color-pass-bg: var(--ac-green-light);
+  --color-fail: var(--ac-red);
+  --color-fail-bg: #fdecea;
+  --color-text: var(--ac-text);
+  --color-muted: var(--ac-text-light);
+  --color-tldr-bg: #e6f9f6;
+  --color-tldr-border: var(--ac-primary-light);
+  --color-cn-bg: #fff8e1;
+  --color-cn-border: var(--ac-yellow);
+  --color-analysis-bg: var(--ac-surface-hover);
+
+  --radius-sm: var(--ac-radius-sm);
+  --radius-md: var(--ac-radius-md);
+  --radius-lg: var(--ac-radius-lg);
+
+  --shadow-sm: var(--ac-shadow);
+  --shadow-md: var(--ac-shadow);
+  --shadow-hover: var(--ac-shadow-hover);
+}
+
+/* ── Page shell ───────────────────────────────────────────── */
+body {
+  font-family: var(--ac-font);
+  color: var(--ac-text);
+  background: var(--ac-bg);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+h1 {
+  color: var(--ac-text-dark);
+  letter-spacing: 0;
+}
+
+h2 {
+  color: var(--ac-text-dark);
+  border-bottom: 2px solid var(--ac-border);
+}
+
+.meta {
+  color: var(--ac-text-light);
+}
+
+/* ── Stat cards: rounded AC surface + 3D-ish shadow ───────── */
+.stats-bar {
+  gap: 16px;
+}
+
+.stat {
+  background: var(--ac-surface);
+  border: 2px solid var(--ac-border);
+  border-radius: var(--ac-radius-lg);
+  box-shadow: var(--ac-shadow);
+}
+
+.stat .num {
+  color: var(--ac-primary);
+  font-weight: 800;
+}
+
+.stat .label {
+  color: var(--ac-text-light);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* ── Paper cards ──────────────────────────────────────────── */
+.card {
+  background: var(--ac-surface);
+  border: 2px solid var(--ac-border);
+  border-left: 6px solid var(--ac-border);
+  border-radius: var(--ac-radius-lg);
+  box-shadow: var(--ac-shadow);
+}
+
+.card:hover {
+  box-shadow: var(--ac-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.card.pass {
+  border-left-color: var(--ac-green);
+}
+
+.card.fail {
+  border-left-color: var(--ac-red);
+}
+
+.card-title {
+  color: var(--ac-text-dark);
+  font-weight: 700;
+}
+
+.card-title a:hover {
+  color: var(--ac-primary);
+}
+
+/* ── Badges: AC pill ──────────────────────────────────────── */
+.badge {
+  border-radius: var(--ac-radius-full);
+  font-weight: 800;
+  padding: 3px 12px;
+}
+
+.badge.pass {
+  background: var(--ac-green-light);
+  color: #3e6416;
+}
+
+.badge.fail {
+  background: #fdecea;
+  color: #b23b38;
+}
+
+/* ── Field rows ───────────────────────────────────────────── */
+.field {
+  color: var(--ac-text-light);
+}
+
+.field-label {
+  color: var(--ac-text-dark);
+  font-weight: 700;
+}
+
+.score {
+  color: var(--ac-primary-dark);
+  font-weight: 800;
+}
+
+/* ── TL;DR block ──────────────────────────────────────────── */
+.tldr {
+  background: linear-gradient(135deg, #e6f9f6 0%, #d3f3ee 100%);
+  border-left: 4px solid var(--ac-primary);
+  border-radius: 0 var(--ac-radius-sm) var(--ac-radius-sm) 0;
+  color: var(--ac-text-dark);
+}
+
+.tldr-meta {
+  color: var(--ac-primary-dark);
+  font-weight: 700;
+}
+
+.tldr-body {
+  color: var(--ac-text-dark);
+}
+
+/* ── Chinese abstract block ───────────────────────────────── */
+.abstract-cn {
+  background: #fff8e1;
+  border: 1px solid var(--ac-yellow);
+  border-radius: var(--ac-radius-sm);
+  color: #7a5c12;
+}
+
+/* ── Collapsible analysis blocks ──────────────────────────── */
+details {
+  border: 2px solid var(--ac-border);
+  border-radius: var(--ac-radius-md);
+  overflow: hidden;
+}
+
+summary {
+  background: var(--ac-surface-hover);
+  color: var(--ac-primary-dark);
+  font-weight: 700;
+}
+
+summary:hover {
+  color: var(--ac-primary);
+}
+
+.analysis-content {
+  background: var(--ac-surface);
+  color: var(--ac-text);
+}
+
+.analysis-content ul {
+  color: var(--ac-text);
+}
+
+.analysis-content li {
+  margin: 4px 0;
+}
+
+/* ── Model tag ────────────────────────────────────────────── */
+.model-badge {
+  color: var(--ac-primary-dark);
+  background: #e6f9f6;
+  border: 1px solid var(--ac-primary-light);
+  border-radius: var(--ac-radius-full);
+  padding: 2px 10px;
+  font-weight: 600;
+}
+
+/* ── Trend section (present in some report variants) ──────── */
+.trend-section {
+  border-top: 2px solid var(--ac-border);
+}
+
+.trend-section-header h2 {
+  background: none;
+  -webkit-text-fill-color: var(--ac-text-dark);
+  color: var(--ac-text-dark);
+}
+
+.trend-card {
+  background: var(--ac-surface);
+  border: 2px solid var(--ac-border);
+  border-radius: var(--ac-radius-lg);
+  box-shadow: var(--ac-shadow);
+}
+
+.trend-card-title {
+  color: var(--ac-text-dark);
+  border-bottom: 1px solid var(--ac-border);
+}
+
+/* ── Scrollbar (nice-to-have, AC sand tone) ───────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ac-cream-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ac-sand);
+  border-radius: var(--ac-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ac-wood);
+}

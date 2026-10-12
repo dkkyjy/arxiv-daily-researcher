@@ -125,7 +125,7 @@ CHEAP_LLM 对每篇论文的每个关键词独立评分（0–10），乘以权�
 
 ### 🖥️ Streamlit 管理面板 <sup><kbd>v3.0</kbd></sup>
 
-浏览器 7-Tab 可视化编辑所有配置 + 在线预览 HTML 报告，支持 LLM 连接测试、SMTP 测试、评分预览。独立 Docker 镜像（`Dockerfile.webui`），256 MB 内存即可运行。
+浏览器 8-Tab 可视化编辑所有配置 + 在线预览 HTML 报告 + 动森主题日报浏览，支持 LLM 连接测试、SMTP 测试、评分预览。独立 Docker 镜像（`Dockerfile.webui`），256 MB 内存即可运行。
 
 </td>
 </tr>
@@ -305,7 +305,7 @@ docker compose -f docker/docker-compose.yml --profile webui up -d config-panel
 
 配置面板通过读写挂载的 `configs/` 和 `.env` 与主程序共用同一套配置文件，修改立即生效（主程序下次运行时读取）。
 
-**7 个 Tab 页详解：**
+**8 个 Tab 页详解：**
 
 | Tab            | 配置内容                                                                                                                                               |
 | :------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -316,6 +316,7 @@ docker compose -f docker/docker-compose.yml --profile webui up -d config-panel
 | **通知**       | 全局通知开关；成功/失败/附件独立开关；**6 个渠道**（Email / 企业微信 / 钉钉 / Telegram / Slack / 通用 Webhook）各自的启用开关和凭据；**SMTP 连接测试** |
 | **高级**       | PDF 解析模式（MinerU / PyMuPDF）+ MinerU 模型版本；并发开关及线程数；HTML 报告开关；日志轮转方式（时间 / 大小）及保留天数；自动更新开关                |
 | **报告查看** <sup><kbd>v3.0</kbd></sup> | 三列并排展示全部类型报告（每日研究 / 趋势分析 / 关键词趋势），每列按来源 / 关键词 Slug 分组，日期标签自动格式化；点击「▶ 预览」后页内嵌入渲染 HTML（高度可调 600–2000 px）；趋势报告显示运行参数摘要（关键词、日期范围、论文数量） |
+| **日报浏览** | 专注 `data/reports/daily_research/`：按数据源（全部 / ARXIV / NATURE / PRD / PRL / SCIENCE）+ 报告选择，顶部动森风概览卡（总抓取 / 及格 / 深度分析 / 及格率 / Token），下方嵌入**动森主题换肤**后的报告全文（高度可调、可下载 HTML）。换肤在预览时注入，不改动生成产物 |
 
 **侧边栏功能：**
 
@@ -327,6 +328,9 @@ docker compose -f docker/docker-compose.yml --profile webui up -d config-panel
 > [!NOTE]
 > WebUI 容器使用独立的 `profiles: [webui]`，不影响主研究容器。只有显式指定 `--profile webui` 时才会启动，两者相互独立。
 
+> [!TIP]
+> **动森主题（Animal Crossing）**：面板外壳与日报浏览页共用一套源自 [ac-site-template](https://github.com/yunxinz/ac-site-template) 的设计 token（奶白/青绿/圆角/3D 下压按钮）。日报换肤在**预览时注入**（`src/webui/theme/ac_theme.py`），**不修改任何生成产物**，邮件/PDF/原始 HTML 均保持原样。拉丁与数字使用内联的 Nunito 圆体（SIL OFL，约 40 KB），中文字形回退到系统圆体，**离线可用**。
+
 
 
 <details>
@@ -335,7 +339,7 @@ docker compose -f docker/docker-compose.yml --profile webui up -d config-panel
 | 工具                             | 适用场景                          | 特点                                      |
 | :------------------------------- | :-------------------------------- | :---------------------------------------- |
 | **配置向导** (`setup_wizard.py`) | 首次部署、无头服务器、SSH 环境    | CLI 终端交互，无需浏览器，支持连接测试    |
-| **配置面板** (`config_panel.py`) | 日常调整、Docker 环境、可视化操作 | 浏览器 UI，7 Tab 页，所见即所得，一键保存，内置报告查看 |
+| **配置面板** (`config_panel.py`) | 日常调整、Docker 环境、可视化操作 | 浏览器 UI，8 Tab 页，所见即所得，一键保存，内置报告查看与动森主题日报浏览 |
 
 **建议**：首次安装时用向导完成基础配置；后续调整参数时打开配置面板更直观高效。
 
@@ -1167,10 +1171,18 @@ arxiv-daily-researcher/
 │   │   ├── setup_wizard.py         # 交互式配置向导（CLI）
 │   │   └── updater.py              # 自动更新
 │   └── 🖥️  webui/                  # Streamlit 配置面板
-│       ├── config_panel.py         # 面板主入口
-│       ├── styles.py               # 自定义 CSS 样式
-│       └── 📂 tabs/               # 7 个 Tab 页（6 配置 + 1 报告查看）
-│           └── reports.py          # 报告查看器 Tab
+│       ├── config_panel.py         # 面板主入口（8 Tab）
+│       ├── styles.py               # 动森主题 CSS（面板外壳）
+│       ├── i18n.py                 # 中英双语文案
+│       ├── 📂 tabs/               # 8 个 Tab 页（6 配置 + 2 查看）
+│       │   ├── reports.py          # 报告查看器 Tab
+│       │   └── daily_view.py       # 日报浏览 Tab（动森主题）
+│       ├── 📂 data/               # 只读数据访问层
+│       │   └── daily_reports.py    # 日报发现 + Markdown 概览解析
+│       └── 📂 theme/              # 动森主题资源
+│           ├── ac_theme.css        # 设计 token + 报告类覆盖
+│           ├── ac_theme.py         # inject_ac_theme() 注入函数
+│           └── 📂 fonts/          # Nunito 拉丁圆体（SIL OFL）
 │
 ├── ⚙️  configs/
 │   ├── config.json                 # 项目主配置（JSON5，可写注释）

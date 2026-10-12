@@ -30,7 +30,7 @@ from utils.config_io import (
 )
 
 from webui.styles import CUSTOM_CSS
-from webui.tabs import llm, search, keywords, scoring, notifications, advanced, reports
+from webui.tabs import llm, search, keywords, scoring, notifications, advanced, reports, daily_view
 from webui.i18n import t
 
 
@@ -159,35 +159,39 @@ st.markdown(
 env_values = load_env()
 config_values = load_config()
 
-# Render tabs
+# Render tabs — view-only tabs first, configuration tabs after
 tab_labels = [
+    t("tab_reports"),
+    t("tab_daily"),
     t("tab_llm"),
     t("tab_search"),
     t("tab_keywords"),
     t("tab_scoring"),
     t("tab_notifications"),
     t("tab_advanced"),
-    t("tab_reports"),
 ]
 tabs = st.tabs(tab_labels)
 
 with tabs[0]:
-    llm.render(env_values, config_values)
+    reports.render(env_values, config_values)
 
 with tabs[1]:
-    search.render(env_values, config_values)
+    daily_view.render(env_values, config_values)
 
 with tabs[2]:
-    keywords.render(env_values, config_values)
+    llm.render(env_values, config_values)
 
 with tabs[3]:
-    scoring.render(env_values, config_values)
+    search.render(env_values, config_values)
 
 with tabs[4]:
-    notifications.render(env_values, config_values)
+    keywords.render(env_values, config_values)
 
 with tabs[5]:
-    advanced.render(env_values, config_values)
+    scoring.render(env_values, config_values)
 
 with tabs[6]:
-    reports.render(env_values, config_values)
+    notifications.render(env_values, config_values)
+
+with tabs[7]:
+    advanced.render(env_values, config_values)

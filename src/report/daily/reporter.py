@@ -20,6 +20,7 @@ from typing import List, Dict, Any, Optional
 from config import settings
 from .modules.base_module import FormatHelper
 from .modules.renderers import ModuleRendererFactory
+from .manifest import build_source_manifest, write_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,14 @@ SOURCE_DISPLAY_NAMES = {
     "prx": "Physical Review X",
     "prxq": "PRX Quantum",
     "rmp": "Reviews of Modern Physics",
+    "jcap": "Journal of Cosmology and Astroparticle Physics",
     "nature": "Nature",
     "nature_physics": "Nature Physics",
     "nature_communications": "Nature Communications",
+    "nature_astronomy": "Nature Astronomy",
     "science": "Science",
     "science_advances": "Science Advances",
+    "science_bulletin": "Science Bulletin",
     "npj_quantum_information": "npj Quantum Information",
     "quantum": "Quantum",
     "new_journal_of_physics": "New Journal of Physics",
@@ -134,6 +138,7 @@ class Reporter:
             logger.info(f"[{source}] 报告已生成: {filepath}")
 
             # 生成 HTML 报告（如果启用）
+            html_filepath = None
             if settings.ENABLE_HTML_REPORT:
                 # HTML 报告目录: reports/html/[source]/
                 if settings.REPORTS_BY_SOURCE:
@@ -154,7 +159,40 @@ class Reporter:
                     token_usage=token_usage,
                 )
                 if html_path:
+                    html_filepath = html_path
                     report_paths[f"{source}_html"] = html_path
+
+            # 生成机器可读 manifest（跨项目契约，schema v1.0）
+            # 失败不影响报告与通知。
+            try:
+                manifest = build_source_manifest(
+                    mode="daily_research",
+                    run_id=timestamp,
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    source=source,
+                    display_name=display_name,
+                    date=datetime.now().strftime("%Y-%m-%d"),
+                    scan_days=getattr(settings, "SEARCH_DAYS", None),
+                    passing_score=settings.calculate_passing_score(
+                        sum(keywords_dict.values())
+                    ),
+                    keywords_dict=keywords_dict,
+                    papers=papers,
+                    analyses=analyses,
+                    token_usage=token_usage,
+                    md_path=filepath,
+                    html_path=html_filepath,
+                    project_root=settings.PROJECT_ROOT,
+                )
+                manifest_dir = self.report_base_dir / "manifest"
+                if settings.REPORTS_BY_SOURCE:
+                    manifest_dir = manifest_dir / source
+                manifest_path = manifest_dir / f"{source.upper()}_Report_{timestamp}.json"
+                write_manifest(manifest_path, manifest)
+                report_paths[f"{source}_manifest"] = manifest_path
+                logger.info(f"[{source}] manifest 已生成: {manifest_path}")
+            except Exception as e:
+                logger.warning(f"[{source}] manifest 生成失败（不影响报告）: {e}")
 
         return report_paths
 
