@@ -420,7 +420,13 @@ class KeywordAgent:
 
         # 保存缓存
         cache_data = {
-            "pdf_hashes": current_hashes,
+            # 只为真正提取过关键词的 PDF 记录哈希：单次最多分析 5 个新 PDF，
+            # 未处理的 PDF 绝不能写入哈希，否则下次会被误判为“已处理”而永久跳过。
+            "pdf_hashes": {
+                name: digest
+                for name, digest in current_hashes.items()
+                if name in cached_pdf_keywords
+            },
             "pdf_keywords": cached_pdf_keywords,
             "keywords": deduplicated_keywords,  # 保留用于向后兼容
         }
