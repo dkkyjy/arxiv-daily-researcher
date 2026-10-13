@@ -1345,9 +1345,8 @@ def build_config_dict(
         },
     }
 
-    # Preserve a pre-V2 configuration's missing strategy on a UI/wizard
-    # round-trip.  The absence intentionally means legacy compatibility; do
-    # not silently flip an established installation to V2 merely by saving.
+    # 只有配置显式选择了策略时才写回策略块；未声明时保持缺失，由 worker
+    # 的默认策略（V2）接管，避免在保存时凭空写入一份历史配置没有的选择。
     if score_strategy_explicit:
         config["scoring_settings"]["strategy"] = {
             "id": score_strategy,
@@ -1581,10 +1580,10 @@ def flatten_config_dict(config: Dict[str, Any]) -> Dict[str, Any]:
         flat["learned_weight_dampening"] = strategy.get("learned_weight_dampening", 0.5)
         flat["learned_term_weight_cap"] = strategy.get("learned_term_weight_cap", 2.0)
     else:
-        # Absence is a meaningful legacy policy rather than an invitation to
-        # silently reinterpret an existing user's historical threshold.
+        # 统一默认 V2：未声明策略时与面板/新配置的默认保持一致。
+        # ``score_strategy_explicit`` 仍为 False，保存时不会凭空写入策略块。
         flat["score_strategy_explicit"] = False
-        flat["score_strategy"] = "legacy_weighted_keyword_v1"
+        flat["score_strategy"] = "core_relevance_v2"
         flat["core_relevance_threshold"] = 6.0
         flat["core_keyword_min_score"] = 7.0
         flat["reference_ranking_weight"] = 0.25

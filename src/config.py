@@ -222,14 +222,14 @@ class Settings(BaseSettings):
     ENABLE_REFERENCE_EXTRACTION: bool = False
 
     # Reference 关键词配置
-    MAX_REFERENCE_KEYWORDS: int = 12
+    MAX_REFERENCE_KEYWORDS: int = 10
     SIMILARITY_THRESHOLD: float = 0.75  # 关键词相似度阈值
-    REFERENCE_WEIGHT_HIGH: float = 0.8
-    REFERENCE_WEIGHT_MEDIUM: float = 0.5
-    REFERENCE_WEIGHT_LOW: float = 0.3
+    REFERENCE_WEIGHT_HIGH: float = 1.0
+    REFERENCE_WEIGHT_MEDIUM: float = 0.2
+    REFERENCE_WEIGHT_LOW: float = 0.1
     REFERENCE_COUNT_HIGH: int = 3
-    REFERENCE_COUNT_MEDIUM: int = 6
-    REFERENCE_COUNT_LOW: int = 3
+    REFERENCE_COUNT_MEDIUM: int = 5
+    REFERENCE_COUNT_LOW: int = 2
 
     # 研究背景上下文
     RESEARCH_CONTEXT: str = ""
@@ -432,11 +432,10 @@ class Settings(BaseSettings):
 
     # 评分策略。legacy_weighted_keyword_v1 保留旧的加权总分判定，
     # weighted_keyword_with_penalties_v1 在正向总分上扣除不关注主题，
-    # core_relevance_v2 将内容资格与排序偏好分离。新安装默认 V2；
-    # 旧 config.json 未声明策略时仍按 legacy 读取，确保可逆升级。
-    # Keep an existing config file that predates ``strategy`` on its original
-    # semantics.  Newly generated configs explicitly select V2 in config_io.
-    SCORE_STRATEGY: str = "legacy_weighted_keyword_v1"
+    # core_relevance_v2 将内容资格与排序偏好分离（推荐）。
+    # 统一默认 V2：新配置与未声明策略的配置都按 V2 读取；需要回退时
+    # 在 config.json 中显式选择 legacy_weighted_keyword_v1。
+    SCORE_STRATEGY: str = "core_relevance_v2"
     # V2: 相关性是主关键词（缺失时安全降级到全部关键词）的 0..max 分
     # 加权平均。该门槛从不因参考关键词数量改变。
     CORE_RELEVANCE_THRESHOLD: float = 6.0
@@ -711,25 +710,25 @@ class Settings(BaseSettings):
 
                 if "reference_keywords_config" in kw_config:
                     ref_cfg = kw_config["reference_keywords_config"]
-                    self.MAX_REFERENCE_KEYWORDS = ref_cfg.get("max_keywords", 12)
+                    self.MAX_REFERENCE_KEYWORDS = ref_cfg.get("max_keywords", 10)
                     self.SIMILARITY_THRESHOLD = ref_cfg.get("similarity_threshold", 0.75)
 
                     weight_dist = ref_cfg.get("weight_distribution", {})
                     if "high_importance" in weight_dist:
                         self.REFERENCE_WEIGHT_HIGH = weight_dist["high_importance"].get(
-                            "weight", 0.8
+                            "weight", 1.0
                         )
                         self.REFERENCE_COUNT_HIGH = weight_dist["high_importance"].get("count", 3)
                     if "medium_importance" in weight_dist:
                         self.REFERENCE_WEIGHT_MEDIUM = weight_dist["medium_importance"].get(
-                            "weight", 0.5
+                            "weight", 0.2
                         )
                         self.REFERENCE_COUNT_MEDIUM = weight_dist["medium_importance"].get(
-                            "count", 6
+                            "count", 5
                         )
                     if "low_importance" in weight_dist:
-                        self.REFERENCE_WEIGHT_LOW = weight_dist["low_importance"].get("weight", 0.3)
-                        self.REFERENCE_COUNT_LOW = weight_dist["low_importance"].get("count", 3)
+                        self.REFERENCE_WEIGHT_LOW = weight_dist["low_importance"].get("weight", 0.1)
+                        self.REFERENCE_COUNT_LOW = weight_dist["low_importance"].get("count", 2)
 
                 # 研究背景
                 self.RESEARCH_CONTEXT = kw_config.get("research_context", "")

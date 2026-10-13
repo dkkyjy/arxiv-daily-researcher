@@ -1321,7 +1321,13 @@ class DailyResearchPipeline:
                 )
             if settings.ENABLE_REFERENCE_EXTRACTION:
                 ref_count = len(all_keywords) - len(settings.PRIMARY_KEYWORDS)
-                logger.info(f"  - Reference关键词: {ref_count} 个（权重 0.3-0.8）")
+                logger.info(
+                    "  - Reference关键词: %d 个（权重 %.1f/%.1f/%.1f）",
+                    ref_count,
+                    settings.REFERENCE_WEIGHT_HIGH,
+                    settings.REFERENCE_WEIGHT_MEDIUM,
+                    settings.REFERENCE_WEIGHT_LOW,
+                )
             logger.info(f"  - 关键词总数: {len(all_keywords)} 个")
             logger.info(f"  - 总权重: {sum(all_keywords.values()):.2f}")
 

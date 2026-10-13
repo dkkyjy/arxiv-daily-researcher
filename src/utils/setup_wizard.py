@@ -496,7 +496,7 @@ def section_scoring(existing_config: dict) -> dict:
                 value="weighted_keyword_with_penalties_v1",
             ),
         ],
-        default=flat.get("score_strategy", "legacy_weighted_keyword_v1"),
+        default=flat.get("score_strategy", "core_relevance_v2"),
         style=WIZARD_STYLE,
     ).ask()
     if strategy is None:
