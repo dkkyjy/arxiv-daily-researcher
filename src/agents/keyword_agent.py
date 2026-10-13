@@ -197,6 +197,83 @@ class KeywordAgent:
             logger.error(f"PDF无法读取 {pdf_path}: {e}")
             return ""
 
+    def _extract_keywords_from_excerpt(self, excerpt: str) -> Dict[str, float]:
+        """
+        对单篇参考PDF的摘录调用一次 LLM，返回该篇自己的 {关键词: 权重}。
+
+        失败时抛出异常，由调用方决定是否写入缓存（未写入则下次运行重试）。
+        """
+        system_prompt = f"""你是一名研究助理。基于用户提供的学术论文摘录，提取真正核心的技术概念和术语。
+
+研究背景:
+{settings.RESEARCH_CONTEXT if settings.RESEARCH_CONTEXT else "通用学术研究"}
+
+请按重要性分为三个层级提取关键词：
+1. 高重要性关键词（最多{settings.REFERENCE_COUNT_HIGH}个）：核心技术、主要算法、关键问题
+2. 中重要性关键词（最多{settings.REFERENCE_COUNT_MEDIUM}个）：相关技术、辅助方法、应用领域
+3. 低重要性关键词（最多{settings.REFERENCE_COUNT_LOW}个）：周边概念、通用术语、背景知识
+
+**重要原则**：
+- 只提取真正核心和重要的关键词，不要为了凑数而提取不重要的内容
+- 如果论文在某个层级没有足够核心的内容，宁可少提取或不提取
+- 每个层级的关键词数量可以少于最大数量，甚至可以为空
+- 关键词质量比数量更重要
+
+要求：
+- 关键词应为专业术语或短语
+- 关键词应具体且有辨识度，能够代表论文的核心贡献
+- 避免过于宽泛的词汇（如"机器学习"、"人工智能"、"优化"等）
+- 优先使用英文术语
+- 避免提取相似或重复的关键词
+- 关键词之间应有明显区别
+- 只提取与研究背景高度相关的核心概念
+
+输出格式: 仅输出JSON对象，包含三个数组。如果某个层级没有足够核心的关键词，数组可以为空或包含较少元素。
+示例:
+{{
+  "high_importance": ["quantum error correction", "topological qubits"],
+  "medium_importance": ["decoherence"],
+  "low_importance": []
+}}
+"""
+        prompt = f"""论文摘录:
+{excerpt}"""
+
+        response = call_chat_completion(
+            self.client,
+            model=settings.CHEAP_LLM.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        )
+        usage = getattr(response, "usage", None)
+        if settings.TOKEN_TRACKING_ENABLED and usage:
+            record_llm_token_usage(
+                settings.CHEAP_LLM.model_name,
+                usage,
+                len(system_prompt + prompt) // 4,
+            )
+        content = response.choices[0].message.content
+
+        # 处理可能的非标准JSON输出包装（去除 markdown 代码块）
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        data = json.loads(content)
+        keywords: Dict[str, float] = {}
+        for kw in data.get("high_importance", [])[: settings.REFERENCE_COUNT_HIGH]:
+            keywords[kw] = settings.REFERENCE_WEIGHT_HIGH
+        for kw in data.get("medium_importance", [])[: settings.REFERENCE_COUNT_MEDIUM]:
+            keywords[kw] = settings.REFERENCE_WEIGHT_MEDIUM
+        for kw in data.get("low_importance", [])[: settings.REFERENCE_COUNT_LOW]:
+            keywords[kw] = settings.REFERENCE_WEIGHT_LOW
+        return keywords
+
     def generate_weighted_keywords(self) -> Dict[str, float]:
         """
         从参考PDF中提取带权重的关键词字典（支持缓存、增量更新和PDF删除检测）。
@@ -274,7 +351,9 @@ class KeywordAgent:
                         merged_keywords[kw] = max(merged_keywords[kw], weight)
                     else:
                         merged_keywords[kw] = weight
-            logger.info(f"缓存的关键词数量: {len(merged_keywords)} 个")
+            # 与新增路径保持一致：缓存路径同样去重。
+            merged_keywords = self._deduplicate_keywords(merged_keywords)
+            logger.info(f"去重后关键词总数: {len(merged_keywords)} 个")
             return merged_keywords
 
         if deleted_pdfs:
@@ -283,123 +362,30 @@ class KeywordAgent:
         if new_pdfs:
             logger.info(f"检测到 {len(new_pdfs)} 个新增/修改的PDF，需要提取关键词")
 
-            # 聚合简化的文本上下文（限制总长度以避免令牌溢出）
-            context_text = ""
-            # 最多分析5个新PDF以节省时间和成本
-            for pdf in new_pdfs[:5]:
-                context_text += (
-                    f"---\n论文: {pdf.name}\n{self._extract_text_from_pdf(pdf)[:2000]}\n"
-                )
+            # 最多分析 5 个新 PDF 以节省时间和成本，其余留待后续运行。
+            # 逐篇提取：每篇各自一次 LLM 调用，得到属于该篇的关键词。
+            attempted = new_pdfs[:5]
+            for pdf in attempted:
+                excerpt = self._extract_text_from_pdf(pdf)[:2000]
+                if not excerpt.strip():
+                    logger.warning(f"  {pdf.name} 未提取到文本，跳过（下次重试）")
+                    continue
                 logger.info(f"  提取文本: {pdf.name}")
-
-            # Keep reusable extraction instructions before changing PDF
-            # excerpts so compatible providers can reuse their prefix cache.
-            system_prompt = f"""你是一名研究助理。基于用户提供的学术论文摘录，提取真正核心的技术概念和术语。
-
-研究背景:
-{settings.RESEARCH_CONTEXT if settings.RESEARCH_CONTEXT else "通用学术研究"}
-
-请按重要性分为三个层级提取关键词：
-1. 高重要性关键词（最多{settings.REFERENCE_COUNT_HIGH}个）：核心技术、主要算法、关键问题
-2. 中重要性关键词（最多{settings.REFERENCE_COUNT_MEDIUM}个）：相关技术、辅助方法、应用领域
-3. 低重要性关键词（最多{settings.REFERENCE_COUNT_LOW}个）：周边概念、通用术语、背景知识
-
-**重要原则**：
-- 只提取真正核心和重要的关键词，不要为了凑数而提取不重要的内容
-- 如果论文在某个层级没有足够核心的内容，宁可少提取或不提取
-- 每个层级的关键词数量可以少于最大数量，甚至可以为空
-- 关键词质量比数量更重要
-
-要求：
-- 关键词应为专业术语或短语
-- 关键词应具体且有辨识度，能够代表论文的核心贡献
-- 避免过于宽泛的词汇（如"机器学习"、"人工智能"、"优化"等）
-- 优先使用英文术语
-- 避免提取相似或重复的关键词
-- 关键词之间应有明显区别
-- 只提取与研究背景高度相关的核心概念
-
-输出格式: 仅输出JSON对象，包含三个数组。如果某个层级没有足够核心的关键词，数组可以为空或包含较少元素。
-示例:
-{{
-  "high_importance": ["quantum error correction", "topological qubits"],
-  "medium_importance": ["decoherence"],
-  "low_importance": []
-}}
-"""
-            prompt = f"""论文摘录:
-{context_text}"""
-
-            try:
-                response = call_chat_completion(
-                    self.client,
-                    model=settings.CHEAP_LLM.model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt.strip()},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.3,
-                    response_format={"type": "json_object"},
-                )
-                usage = getattr(response, "usage", None)
-                if settings.TOKEN_TRACKING_ENABLED and usage:
-                    record_llm_token_usage(
-                        settings.CHEAP_LLM.model_name,
-                        usage,
-                        len(system_prompt + prompt) // 4,
-                    )
-                content = response.choices[0].message.content
-
-                # 处理可能的非标准JSON输出包装（去除 markdown 代码块）
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    content = content.split("```")[1].split("```")[0].strip()
-
-                data = json.loads(content)
-
-                # 构建新提取的关键词字典
-                new_keywords = {}
-
-                # 添加高重要性关键词
-                high_keywords = data.get("high_importance", [])
-                for kw in high_keywords[: settings.REFERENCE_COUNT_HIGH]:
-                    new_keywords[kw] = settings.REFERENCE_WEIGHT_HIGH
-
-                # 添加中重要性关键词
-                medium_keywords = data.get("medium_importance", [])
-                for kw in medium_keywords[: settings.REFERENCE_COUNT_MEDIUM]:
-                    new_keywords[kw] = settings.REFERENCE_WEIGHT_MEDIUM
-
-                # 添加低重要性关键词
-                low_keywords = data.get("low_importance", [])
-                for kw in low_keywords[: settings.REFERENCE_COUNT_LOW]:
-                    new_keywords[kw] = settings.REFERENCE_WEIGHT_LOW
-
-                logger.info(f"从新PDF中提取了 {len(new_keywords)} 个新关键词:")
-                logger.info(
-                    f"  高权重({settings.REFERENCE_WEIGHT_HIGH}): {len(high_keywords[:settings.REFERENCE_COUNT_HIGH])} 个"
-                )
-                logger.info(
-                    f"  中权重({settings.REFERENCE_WEIGHT_MEDIUM}): {len(medium_keywords[:settings.REFERENCE_COUNT_MEDIUM])} 个"
-                )
-                logger.info(
-                    f"  低权重({settings.REFERENCE_WEIGHT_LOW}): {len(low_keywords[:settings.REFERENCE_COUNT_LOW])} 个"
-                )
-
-                # 只为实际分析过的PDF保存其关键词
-                for pdf in new_pdfs[:5]:
-                    cached_pdf_keywords[pdf.name] = new_keywords.copy()
-
+                try:
+                    pdf_keywords = self._extract_keywords_from_excerpt(excerpt)
+                except Exception as e:
+                    self._record_llm_health(False, e)
+                    logger.error(f"从 {pdf.name} 提取关键词失败（下次重试）: {e}")
+                    continue
+                # 只为真正提取成功的 PDF 写入缓存，失败的留给下次重试。
+                cached_pdf_keywords[pdf.name] = pdf_keywords
                 self._record_llm_health(True)
+                logger.info(f"  从 {pdf.name} 提取了 {len(pdf_keywords)} 个关键词")
 
-            except Exception as e:
-                self._record_llm_health(False, e)
-                logger.error(f"通过LLM提取关键词失败: {e}")
-                import traceback
-
-                traceback.print_exc()
-                logger.info("继续使用现有缓存的关键词")
+            processed = sum(1 for pdf in attempted if pdf.name in cached_pdf_keywords)
+            remaining = len(new_pdfs) - processed
+            if remaining > 0:
+                logger.info(f"  本次处理 {processed} 个，仍有 {remaining} 个留待后续运行")
 
         # 从所有现存PDF的关键词合并生成最终关键词
         merged_keywords = {}
