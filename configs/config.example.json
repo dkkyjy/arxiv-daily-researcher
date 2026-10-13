@@ -220,9 +220,10 @@
   },
   "daily_research": {
     "enable_deep_analysis": true,
-    // 0 = process every pending paper; positive values are useful for tests.
-    // Fetching is never truncated: excess candidates stay queued in SQLite.
-    "max_papers_per_run": 3,
+    // Default 200 protects a fresh deployment whose first scan collects a
+    // large backlog; excess candidates stay queued in SQLite for later runs.
+    // 0 = process every pending paper. Fetching is never truncated.
+    "max_papers_per_run": 200,
     "run_time": "12:00",
     "db_path": "data/daily_research/daily_research.db"
   },
@@ -240,7 +241,7 @@
   // starts after normal worker jobs and their queued requests are clear.
   // ``time_window`` additionally limits starts to a local-time window.
   "history_maintenance": {
-    "max_papers_per_run": 3,
+    "max_papers_per_run": 200,
     "run_mode": "idle",
     "time_window_start": "00:00",
     "time_window_end": "06:00"
