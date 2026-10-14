@@ -849,6 +849,7 @@ def build_config_dict(
     reference_pdf_max_files: int = 0,
     reference_keyword_min_weight: float = 0.0,
     reference_keyword_max_count: int = 0,
+    reference_weight_step: float = 0.0,
     max_reference_keywords: int = 10,
     similarity_threshold: float = 0.75,
     ref_weight_high: float = 1.0,
@@ -1168,6 +1169,7 @@ def build_config_dict(
             "reference_pdf_max_files": reference_pdf_max_files,
             "reference_keyword_min_weight": reference_keyword_min_weight,
             "reference_keyword_max_count": reference_keyword_max_count,
+            "reference_weight_step": reference_weight_step,
             "reference_keywords_config": {
                 "max_keywords": max_reference_keywords,
                 "similarity_threshold": similarity_threshold,
@@ -1533,6 +1535,7 @@ def flatten_config_dict(config: Dict[str, Any]) -> Dict[str, Any]:
     flat["reference_pdf_max_files"] = kw.get("reference_pdf_max_files", 0)
     flat["reference_keyword_min_weight"] = kw.get("reference_keyword_min_weight", 0.0)
     flat["reference_keyword_max_count"] = kw.get("reference_keyword_max_count", 0)
+    flat["reference_weight_step"] = kw.get("reference_weight_step", 0.0)
 
     ref = kw.get("reference_keywords_config", {})
     flat["max_reference_keywords"] = ref.get("max_keywords", 10)

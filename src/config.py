@@ -230,6 +230,9 @@ class Settings(BaseSettings):
     REFERENCE_COUNT_HIGH: int = 3
     REFERENCE_COUNT_MEDIUM: int = 5
     REFERENCE_COUNT_LOW: int = 2
+    # 关键词按重要性顺序递减的权重间隔；>0 时启用连续档位（如 0.1 → 1.0/0.9/0.8…），
+    # 0 = 三档各取同一权重（旧行为）。
+    REFERENCE_WEIGHT_STEP: float = 0.0
 
     # 研究背景上下文
     RESEARCH_CONTEXT: str = ""
@@ -748,6 +751,15 @@ class Settings(BaseSettings):
                     self.REFERENCE_KEYWORD_MAX_COUNT = 0
                 if self.REFERENCE_KEYWORD_MAX_COUNT < 0:
                     self.REFERENCE_KEYWORD_MAX_COUNT = 0
+
+                try:
+                    self.REFERENCE_WEIGHT_STEP = float(
+                        kw_config.get("reference_weight_step", 0.0) or 0.0
+                    )
+                except (TypeError, ValueError):
+                    self.REFERENCE_WEIGHT_STEP = 0.0
+                if self.REFERENCE_WEIGHT_STEP < 0:
+                    self.REFERENCE_WEIGHT_STEP = 0.0
 
                 if "reference_keywords_config" in kw_config:
                     ref_cfg = kw_config["reference_keywords_config"]

@@ -265,13 +265,34 @@ class KeywordAgent:
             content = content.split("```")[1].split("```")[0].strip()
 
         data = json.loads(content)
+
+        def _clean(values, limit):
+            return [
+                kw
+                for kw in list(values)[:limit]
+                if isinstance(kw, str) and kw.strip()
+            ]
+
+        high = _clean(data.get("high_importance", []), settings.REFERENCE_COUNT_HIGH)
+        medium = _clean(data.get("medium_importance", []), settings.REFERENCE_COUNT_MEDIUM)
+        low = _clean(data.get("low_importance", []), settings.REFERENCE_COUNT_LOW)
+
         keywords: Dict[str, float] = {}
-        for kw in data.get("high_importance", [])[: settings.REFERENCE_COUNT_HIGH]:
-            keywords[kw] = settings.REFERENCE_WEIGHT_HIGH
-        for kw in data.get("medium_importance", [])[: settings.REFERENCE_COUNT_MEDIUM]:
-            keywords[kw] = settings.REFERENCE_WEIGHT_MEDIUM
-        for kw in data.get("low_importance", [])[: settings.REFERENCE_COUNT_LOW]:
-            keywords[kw] = settings.REFERENCE_WEIGHT_LOW
+        step = float(getattr(settings, "REFERENCE_WEIGHT_STEP", 0.0) or 0.0)
+        if step > 0:
+            # 按 高→中→低 顺序给每个关键词递减权重（如 1.0/0.9/0.8…），
+            # 而不是每档同值；下限为低档权重。
+            start = float(settings.REFERENCE_WEIGHT_HIGH)
+            floor = float(settings.REFERENCE_WEIGHT_LOW)
+            for index, kw in enumerate(high + medium + low):
+                keywords[kw] = round(max(floor, start - index * step), 4)
+        else:
+            for kw in high:
+                keywords[kw] = settings.REFERENCE_WEIGHT_HIGH
+            for kw in medium:
+                keywords[kw] = settings.REFERENCE_WEIGHT_MEDIUM
+            for kw in low:
+                keywords[kw] = settings.REFERENCE_WEIGHT_LOW
         return keywords
 
     def generate_weighted_keywords(self) -> Dict[str, float]:

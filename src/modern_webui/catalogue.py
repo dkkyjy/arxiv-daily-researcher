@@ -828,6 +828,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh": "超过上限时只保留权重最高的 N 个参考关键词（0 = 不限制）。",
         "en": "When over the limit, keep only the N highest-weighted reference keywords (0 = unlimited).",
     },
+    "reference_weight_step_label": {
+        "zh": "参考词权重递减间隔",
+        "en": "Reference weight step",
+    },
+    "reference_weight_step_help": {
+        "zh": "按重要性顺序每个关键词递减的权重（如 0.1 → 1.0/0.9/0.8…）而不是三档同值；0 = 保持三档固定权重。",
+        "en": "Decrease each keyword's weight along the importance order (0.1 → 1.0/0.9/0.8…), instead of equal weights per tier; 0 = keep the three fixed tier weights.",
+    },
     "max_extracted_kws": {
         "zh": "最大提取关键词数",
         "en": "Max extracted keywords",
