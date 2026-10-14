@@ -60,6 +60,7 @@
       "entries": []
     },
     "enable_reference_extraction": true,
+    "auto_archive_qualified_pdfs": false,
     "reference_keywords_config": {
       "max_keywords": 10,
       "similarity_threshold": 0.75,

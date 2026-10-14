@@ -796,6 +796,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh": "启用参考文献关键词提取",
         "en": "Enable reference keyword extraction",
     },
+    "auto_archive_qualified_pdfs": {
+        "zh": "每天自动归档及格论文 PDF 到参考目录",
+        "en": "Archive qualified paper PDFs to the reference folder daily",
+    },
+    "auto_archive_qualified_pdfs_help": {
+        "zh": "每天把通过评分的论文 PDF 下载到 data/reference_pdfs/，持续扩充参考集；目录会随时间增长。",
+        "en": "Download each day's qualified paper PDFs into data/reference_pdfs/ to grow the reference set; the folder grows over time.",
+    },
     "max_extracted_kws": {
         "zh": "最大提取关键词数",
         "en": "Max extracted keywords",

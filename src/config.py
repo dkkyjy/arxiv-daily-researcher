@@ -234,6 +234,9 @@ class Settings(BaseSettings):
     # 研究背景上下文
     RESEARCH_CONTEXT: str = ""
 
+    # 每日把通过评分的论文 PDF 归档到参考 PDF 目录，持续扩充参考集。
+    AUTO_ARCHIVE_QUALIFIED_REFERENCE_PDFS: bool = False
+
     # ==================== 关键词追踪配置 ====================
     KEYWORD_TRACKER_ENABLED: bool = True
     KEYWORD_DB_PATH: Path = DATA_DIR / "keywords" / "keywords.db"
@@ -706,6 +709,10 @@ class Settings(BaseSettings):
                 # Reference 提取配置
                 self.ENABLE_REFERENCE_EXTRACTION = kw_config.get(
                     "enable_reference_extraction", False
+                )
+
+                self.AUTO_ARCHIVE_QUALIFIED_REFERENCE_PDFS = kw_config.get(
+                    "auto_archive_qualified_pdfs", False
                 )
 
                 if "reference_keywords_config" in kw_config:

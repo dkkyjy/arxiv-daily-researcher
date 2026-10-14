@@ -312,6 +312,109 @@ def _auto_favorite_qualified_paper(store, source, paper, score_response) -> None
         logger.info("自动收藏及格论文: %s:%s", source, paper.paper_id)
 
 
+def _archive_reference_pdf_bytes(pdf_url: str) -> bytes:
+    """Download one qualified paper's PDF for the reference folder."""
+    import requests
+
+    from utils.safe_download import download_external_bytes
+
+    headers = {"User-Agent": "ArxivDailyResearcher/2.0 (reference-pdf-archive)"}
+    return download_external_bytes(
+        pdf_url,
+        requests.get,
+        max_bytes=max(1, int(settings.PDF_DOWNLOAD_MAX_BYTES)),
+        request_kwargs={"headers": headers, "timeout": 30},
+        required_magic=b"%PDF-",
+    )
+
+
+def _write_bytes_atomic(target: Path, data: bytes) -> None:
+    import os
+    import tempfile
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(
+        dir=str(target.parent), prefix=f".{target.name}.", suffix=".part"
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _archive_qualified_reference_pdfs(
+    scored_papers_by_source: Dict[str, List[Dict[str, Any]]],
+    logger_instance,
+    limit: int = 20,
+) -> Dict[str, int]:
+    """Download qualified papers' PDFs into the reference-PDF directory.
+
+    Best-effort: a download failure is logged and never affects scoring,
+    analysis or delivery. Papers already archived (matched by canonical id)
+    are skipped so repeated runs do not re-download the same PDF.
+    """
+    summary = {"added": 0, "existing": 0, "skipped": 0, "failed": 0}
+    if not getattr(settings, "AUTO_ARCHIVE_QUALIFIED_REFERENCE_PDFS", False):
+        return summary
+
+    ref_dir = settings.REF_PDF_DIR
+    try:
+        ref_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger_instance.warning("无法创建参考 PDF 目录 %s: %s", ref_dir, exc)
+        return summary
+
+    for scored_papers in scored_papers_by_source.values():
+        for paper_info in scored_papers:
+            score_response = paper_info.get("score_response")
+            if not getattr(score_response, "is_qualified", False):
+                continue
+
+            paper_meta = paper_info.get("paper_metadata")
+            paper_id = str(paper_info.get("paper_id") or "")
+            if not paper_id:
+                summary["skipped"] += 1
+                continue
+
+            pdf_url = ""
+            canonical = paper_id
+            if paper_meta is not None:
+                canonical = str(getattr(paper_meta, "canonical_id", "") or paper_id)
+                try:
+                    pdf_url = str(paper_meta.get_best_pdf_url() or "")
+                except Exception:
+                    pdf_url = str(getattr(paper_meta, "pdf_url", "") or "")
+            if not pdf_url:
+                summary["skipped"] += 1
+                continue
+
+            if canonical and list(ref_dir.glob(f"{canonical}*.pdf")):
+                summary["existing"] += 1
+                continue
+
+            if limit and summary["added"] >= limit:
+                summary["skipped"] += 1
+                continue
+
+            target = ref_dir / f"{paper_id}.pdf"
+            try:
+                data = _archive_reference_pdf_bytes(pdf_url)
+                _write_bytes_atomic(target, data)
+            except Exception as exc:
+                summary["failed"] += 1
+                logger_instance.warning("归档及格论文 PDF 失败 %s: %s", paper_id, exc)
+                continue
+            summary["added"] += 1
+
+    return summary
+
+
 def _score_single_paper(
     paper,
     source,
@@ -1817,6 +1920,17 @@ class DailyResearchPipeline:
                 cache_savings = total_papers_count - len(translation_cache)
                 if cache_savings > 0:
                     logger.info(f"  翻译缓存节省了 {cache_savings} 次API调用")
+
+            # ==================== 归档及格论文 PDF 到参考目录 ====================
+            archived = _archive_qualified_reference_pdfs(scored_papers_by_source, logger)
+            if archived["added"] or archived["failed"]:
+                logger.info(
+                    "  [参考目录] 新增 %s，已存 %s，跳过 %s，失败 %s",
+                    archived["added"],
+                    archived["existing"],
+                    archived["skipped"],
+                    archived["failed"],
+                )
 
             # ==================== 阶段5: 深度分析及格论文 ====================
             store.record_run_phase(run_id, "analyze")
