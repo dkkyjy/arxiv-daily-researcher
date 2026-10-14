@@ -1661,21 +1661,60 @@ def learned_preference_terms() -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def extracted_keywords() -> list[dict[str, Any]]:
+def extracted_keywords() -> dict[str, Any]:
+    """Extracted reference keywords with the active (post-trim) set marked.
+
+    Returns the full cache so the panel can show what was trimmed, plus the
+    effective count and the limits currently applied at scoring time.
+    """
+    empty: dict[str, Any] = {
+        "items": [],
+        "total": 0,
+        "effective": 0,
+        "min_weight": 0.0,
+        "max_count": 0,
+    }
     path = configured_data_dir() / "keywords" / "keywords_cache.json"
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
-        return []
+        return empty
     keywords = raw.get("keywords") if isinstance(raw, dict) else None
     if not isinstance(keywords, dict):
-        return []
+        return empty
+
+    flat = flat_config()
+    try:
+        min_weight = max(0.0, float(flat.get("reference_keyword_min_weight") or 0.0))
+    except (TypeError, ValueError):
+        min_weight = 0.0
+    try:
+        max_count = max(0, int(flat.get("reference_keyword_max_count") or 0))
+    except (TypeError, ValueError):
+        max_count = 0
+
     rows = []
     for name, weight in keywords.items():
         if not isinstance(name, str) or not isinstance(weight, (int, float)):
             continue
         rows.append({"keyword": name, "weight": float(weight)})
-    return sorted(rows, key=lambda item: (-item["weight"], item["keyword"]))
+    rows.sort(key=lambda item: (-item["weight"], item["keyword"]))
+
+    candidates = [row for row in rows if min_weight <= 0 or row["weight"] >= min_weight]
+    if max_count > 0 and len(candidates) > max_count:
+        active = {row["keyword"] for row in candidates[:max_count]}
+    else:
+        active = {row["keyword"] for row in candidates}
+    for row in rows:
+        row["effective"] = row["keyword"] in active
+
+    return {
+        "items": rows,
+        "total": len(rows),
+        "effective": len(active),
+        "min_weight": min_weight,
+        "max_count": max_count,
+    }
 
 
 def _read_trend_prompt_templates() -> dict[str, str]:

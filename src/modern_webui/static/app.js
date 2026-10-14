@@ -2942,26 +2942,35 @@ async function loadExtractedKeywords(root, token) {
     const result = await api("/api/extracted-keywords");
     if (token !== state.renderToken || !booleanValue(configValue("enable_reference_extraction", false), false)) return;
     if (host) {
-      host.innerHTML = extractedKeywordList(result.items || []);
+      host.innerHTML = extractedKeywordList(result);
       bindPagers(host);
       applyLocale(host);
     }
   } catch (error) { /* cache visibility should not prevent configuration */ }
 }
 
-function extractedKeywordList(items) {
-  if (!items.length) return '<p class="empty-state">尚未提取关键词。</p>';
-  const count = formatNumber(items.length);
-  const countLabel = localeText(`已提取 ${count} 个关键词`, `${count} extracted keywords`);
-  return `<div class="extracted-keywords-table"><p class="hint-text">${escapeHtml(countLabel)}</p>${pagedTable("reference-extracted-keywords", [
+function extractedKeywordList(payload) {
+  const items = Array.isArray(payload) ? payload : (payload && payload.items) || [];
+  if (!items.length) return '<p>尚未提取关键词。</p>';
+  const totalValue = Number(payload && payload.total);
+  const effectiveValue = Number(payload && payload.effective);
+  const minWeight = Number(payload && payload.min_weight) || 0;
+  const maxCount = Number(payload && payload.max_count) || 0;
+  const total = Number.isFinite(totalValue) ? formatNumber(totalValue) : formatNumber(items.length);
+  const effective = Number.isFinite(effectiveValue) ? formatNumber(effectiveValue) : total;
+  const summary = localeText(
+    `已提取 ${total} 个，生效 ${effective} 个（权重≥${minWeight}，上限 ${maxCount || "无"}）`,
+    `${total} extracted, ${effective} active (min weight ${minWeight}, cap ${maxCount || "none"})`
+  );
+  return `<div><p>${escapeHtml(summary)}</p>${pagedTable("reference-extracted-keywords", [
     { label: "关键词", value: (row) => row.keyword || "—" },
     { label: "权重", value: (row) => {
       const weight = Number(row.weight);
       return Number.isFinite(weight) ? weight.toFixed(2) : "—";
     } },
+    { label: localeText("状态", "Status"), value: (row) => row.effective ? localeText("生效", "active") : localeText("已裁剪", "trimmed") },
   ], items, { empty: "尚未提取关键词。" })}</div>`;
 }
-
 function renderReferenceExtraction() {
   const enabled = booleanValue(configValue("enable_reference_extraction", false), false);
   const fields = `<div class="reference-extraction-fields"><div class="form-grid two">${field({ label: "最多关键词数量", key: "max_reference_keywords", type: "number", min: 1, max: 50, fallback: 10 })}${field({ label: "相似度阈值", key: "similarity_threshold", type: "range", min: 0, max: 1, step: 0.05, fallback: 0.75 })}${field({ label: "参考 PDF 保留上限", key: "reference_pdf_max_files", type: "number", min: 0, max: 100000, step: 1, fallback: 0, help: "超过上限时按论文总分从低到高清理旧文件（0 = 不清理）；无法匹配到评分的 PDF 不会被删除。" })}${field({ label: "参考关键词最低权重", key: "reference_keyword_min_weight", type: "number", min: 0, max: 5, step: 0.05, fallback: 0, help: "合并后低于此权重的参考关键词会被丢弃（0 = 不丢弃）；只影响评分用词，缓存仍保留。" })}${field({ label: "参考关键词数量上限", key: "reference_keyword_max_count", type: "number", min: 0, max: 100000, step: 1, fallback: 0, help: "超过上限时只保留权重最高的 N 个参考关键词（0 = 不限制）。" })}</div><div class="form-grid three">${weightField("高重要度", "high", 1, 3)}${weightField("中重要度", "medium", 0.2, 5)}${weightField("低重要度", "low", 0.1, 2)}</div><div id="extracted-keywords"><div class="loading">正在读取已提取关键词…</div></div></div>`;

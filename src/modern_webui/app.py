@@ -615,7 +615,7 @@ async def learned_get(request: Request) -> JSONResponse:
 
 async def extracted_keywords_get(request: Request) -> JSONResponse:
     _require_session(request)
-    return JSONResponse({"items": await _blocking_call(backend.extracted_keywords)})
+    return JSONResponse(await _blocking_call(backend.extracted_keywords))
 
 
 async def trend_templates_get(request: Request) -> JSONResponse:
