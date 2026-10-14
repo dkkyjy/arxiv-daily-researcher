@@ -804,6 +804,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh": "每天把通过评分的论文 PDF 下载到 data/reference_pdfs/，持续扩充参考集；目录会随时间增长。",
         "en": "Download each day's qualified paper PDFs into data/reference_pdfs/ to grow the reference set; the folder grows over time.",
     },
+    "reference_pdf_max_files_label": {
+        "zh": "参考 PDF 保留上限",
+        "en": "Max reference PDFs kept",
+    },
+    "reference_pdf_max_files_help": {
+        "zh": "超过上限时按论文总分从低到高清理旧文件（0 = 不清理）；无法匹配到评分的 PDF 不会被删除。",
+        "en": "When over the limit, remove the lowest-scored archived PDFs first (0 = keep all); PDFs with no matching score are never removed.",
+    },
     "max_extracted_kws": {
         "zh": "最大提取关键词数",
         "en": "Max extracted keywords",

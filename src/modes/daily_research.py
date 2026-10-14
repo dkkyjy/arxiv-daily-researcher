@@ -415,6 +415,63 @@ def _archive_qualified_reference_pdfs(
     return summary
 
 
+def _prune_reference_pdfs(store, logger_instance, keep: int) -> Dict[str, int]:
+    """Delete the lowest-scored archived reference PDFs, keeping the top ``keep``.
+
+    Only PDFs whose filename maps to a scored paper in the ledger are
+    eligible; files with no matching score (hand-made references) are never
+    deleted. Removal is best-effort and never affects the run.
+    """
+    summary = {"kept": 0, "removed": 0, "unknown": 0, "failed": 0}
+    if keep <= 0 or store is None:
+        return summary
+
+    ref_dir = settings.REF_PDF_DIR
+    try:
+        pdfs = sorted(ref_dir.glob("*.pdf"))
+    except OSError as exc:
+        logger_instance.warning("读取参考 PDF 目录失败 %s: %s", ref_dir, exc)
+        return summary
+    if not pdfs:
+        return summary
+
+    try:
+        scores = store.reference_pdf_scores()
+    except Exception as exc:
+        logger_instance.warning("读取评分用于参考 PDF 清理失败: %s", exc)
+        return summary
+
+    import re
+
+    ranked = []
+    for path in pdfs:
+        stem = path.stem
+        score = scores.get(stem)
+        if score is None:
+            score = scores.get(re.sub(r"v\d+$", "", stem))
+        if score is None:
+            summary["unknown"] += 1
+            continue
+        ranked.append((score, path))
+
+    if len(ranked) <= keep:
+        summary["kept"] = len(ranked)
+        return summary
+
+    ranked.sort(key=lambda item: (item[0], item[1].name))
+    for score, path in ranked[: len(ranked) - keep]:
+        try:
+            path.unlink()
+        except OSError as exc:
+            summary["failed"] += 1
+            logger_instance.warning("删除参考 PDF 失败 %s: %s", path.name, exc)
+            continue
+        summary["removed"] += 1
+        logger_instance.info("清理评分靠后的参考 PDF: %s (得分 %.1f)", path.name, score)
+    summary["kept"] = len(ranked) - summary["removed"]
+    return summary
+
+
 def _score_single_paper(
     paper,
     source,
@@ -1930,6 +1987,20 @@ class DailyResearchPipeline:
                     archived["existing"],
                     archived["skipped"],
                     archived["failed"],
+                )
+
+            pruned = _prune_reference_pdfs(
+                store,
+                logger,
+                int(getattr(settings, "REFERENCE_PDF_MAX_FILES", 0) or 0),
+            )
+            if pruned["removed"] or pruned["failed"]:
+                logger.info(
+                    "  [参考目录] 清理评分靠后 %s 篇（保留 %s，未知来源 %s，失败 %s）",
+                    pruned["removed"],
+                    pruned["kept"],
+                    pruned["unknown"],
+                    pruned["failed"],
                 )
 
             # ==================== 阶段5: 深度分析及格论文 ====================

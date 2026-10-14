@@ -4009,6 +4009,35 @@ class DailyResearchStore:
             )
         return cursor.rowcount > 0
 
+    def reference_pdf_scores(self) -> Dict[str, float]:
+        """Return ``paper_id``/``canonical_id`` -> total score for scored papers.
+
+        Used to rank archived reference PDFs so the lowest-scored ones can be
+        pruned. Missing or malformed scores are skipped.
+        """
+        scores: Dict[str, float] = {}
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT paper_id, canonical_id, score_json FROM daily_papers "
+                "WHERE score_json IS NOT NULL AND trim(score_json) <> '' "
+                "AND json_valid(score_json)"
+            ).fetchall()
+        for row in rows:
+            payload = self._decode_json_object(row["score_json"])
+            try:
+                total = float(payload.get("total_score"))
+            except (TypeError, ValueError):
+                continue
+            for key in (row["paper_id"], row["canonical_id"]):
+                if not key:
+                    continue
+                key = str(key)
+                existing = scores.get(key)
+                # Keep the highest score when a canonical id spans versions.
+                if existing is None or total > existing:
+                    scores[key] = total
+        return scores
+
     def collect_qualified_favorites(self) -> Dict[str, int]:
         """Add every already-qualified paper to 收藏 without replacing a reader mark.
 

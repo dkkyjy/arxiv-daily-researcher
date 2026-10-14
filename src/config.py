@@ -236,6 +236,8 @@ class Settings(BaseSettings):
 
     # 每日把通过评分的论文 PDF 归档到参考 PDF 目录，持续扩充参考集。
     AUTO_ARCHIVE_QUALIFIED_REFERENCE_PDFS: bool = False
+    # 参考 PDF 目录的保留上限；超出时按论文总分从低到高清理（0 = 不清理）。
+    REFERENCE_PDF_MAX_FILES: int = 0
 
     # ==================== 关键词追踪配置 ====================
     KEYWORD_TRACKER_ENABLED: bool = True
@@ -714,6 +716,15 @@ class Settings(BaseSettings):
                 self.AUTO_ARCHIVE_QUALIFIED_REFERENCE_PDFS = kw_config.get(
                     "auto_archive_qualified_pdfs", False
                 )
+
+                try:
+                    self.REFERENCE_PDF_MAX_FILES = int(
+                        kw_config.get("reference_pdf_max_files", 0) or 0
+                    )
+                except (TypeError, ValueError):
+                    self.REFERENCE_PDF_MAX_FILES = 0
+                if self.REFERENCE_PDF_MAX_FILES < 0:
+                    self.REFERENCE_PDF_MAX_FILES = 0
 
                 if "reference_keywords_config" in kw_config:
                     ref_cfg = kw_config["reference_keywords_config"]
