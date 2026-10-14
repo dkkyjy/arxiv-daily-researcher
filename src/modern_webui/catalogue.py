@@ -812,6 +812,22 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh": "超过上限时按论文总分从低到高清理旧文件（0 = 不清理）；无法匹配到评分的 PDF 不会被删除。",
         "en": "When over the limit, remove the lowest-scored archived PDFs first (0 = keep all); PDFs with no matching score are never removed.",
     },
+    "reference_keyword_min_weight_label": {
+        "zh": "参考关键词最低权重",
+        "en": "Min reference keyword weight",
+    },
+    "reference_keyword_min_weight_help": {
+        "zh": "合并后低于此权重的参考关键词会被丢弃（0 = 不丢弃）；只影响评分用词，缓存仍保留。",
+        "en": "Drop merged reference keywords below this weight (0 = keep all); only affects scoring, the cache keeps them.",
+    },
+    "reference_keyword_max_count_label": {
+        "zh": "参考关键词数量上限",
+        "en": "Max reference keywords",
+    },
+    "reference_keyword_max_count_help": {
+        "zh": "超过上限时只保留权重最高的 N 个参考关键词（0 = 不限制）。",
+        "en": "When over the limit, keep only the N highest-weighted reference keywords (0 = unlimited).",
+    },
     "max_extracted_kws": {
         "zh": "最大提取关键词数",
         "en": "Max extracted keywords",

@@ -239,6 +239,11 @@ class Settings(BaseSettings):
     # 参考 PDF 目录的保留上限；超出时按论文总分从低到高清理（0 = 不清理）。
     REFERENCE_PDF_MAX_FILES: int = 0
 
+    # 合并后的参考关键词裁剪：低于权重阈值的丢弃；超过数量上限时保留权重最高的 N 个。
+    # 0 = 不限制。仅作用于运行时合并结果，缓存仍保留全部词，调回即可恢复。
+    REFERENCE_KEYWORD_MIN_WEIGHT: float = 0.0
+    REFERENCE_KEYWORD_MAX_COUNT: int = 0
+
     # ==================== 关键词追踪配置 ====================
     KEYWORD_TRACKER_ENABLED: bool = True
     KEYWORD_DB_PATH: Path = DATA_DIR / "keywords" / "keywords.db"
@@ -725,6 +730,24 @@ class Settings(BaseSettings):
                     self.REFERENCE_PDF_MAX_FILES = 0
                 if self.REFERENCE_PDF_MAX_FILES < 0:
                     self.REFERENCE_PDF_MAX_FILES = 0
+
+                try:
+                    self.REFERENCE_KEYWORD_MIN_WEIGHT = float(
+                        kw_config.get("reference_keyword_min_weight", 0.0) or 0.0
+                    )
+                except (TypeError, ValueError):
+                    self.REFERENCE_KEYWORD_MIN_WEIGHT = 0.0
+                if self.REFERENCE_KEYWORD_MIN_WEIGHT < 0:
+                    self.REFERENCE_KEYWORD_MIN_WEIGHT = 0.0
+
+                try:
+                    self.REFERENCE_KEYWORD_MAX_COUNT = int(
+                        kw_config.get("reference_keyword_max_count", 0) or 0
+                    )
+                except (TypeError, ValueError):
+                    self.REFERENCE_KEYWORD_MAX_COUNT = 0
+                if self.REFERENCE_KEYWORD_MAX_COUNT < 0:
+                    self.REFERENCE_KEYWORD_MAX_COUNT = 0
 
                 if "reference_keywords_config" in kw_config:
                     ref_cfg = kw_config["reference_keywords_config"]

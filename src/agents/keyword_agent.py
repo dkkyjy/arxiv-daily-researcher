@@ -420,6 +420,40 @@ class KeywordAgent:
 
         return deduplicated_keywords
 
+    def _trim_reference_keywords(
+        self, keywords: Dict[str, float]
+    ) -> Dict[str, float]:
+        """Apply the configured weight floor and top-N cap to reference keywords.
+
+        Trimming happens at merge time only; the per-PDF cache keeps every
+        extracted term, so relaxing the limits later restores the terms
+        without another LLM call.
+        """
+        if not keywords:
+            return keywords
+        min_weight = float(
+            getattr(settings, "REFERENCE_KEYWORD_MIN_WEIGHT", 0.0) or 0.0
+        )
+        max_count = int(getattr(settings, "REFERENCE_KEYWORD_MAX_COUNT", 0) or 0)
+        trimmed = keywords
+        if min_weight > 0:
+            trimmed = {
+                kw: weight for kw, weight in trimmed.items() if weight >= min_weight
+            }
+        if max_count > 0 and len(trimmed) > max_count:
+            trimmed = dict(
+                sorted(trimmed.items(), key=lambda item: (-item[1], item[0]))[:max_count]
+            )
+        if len(trimmed) != len(keywords):
+            logger.info(
+                "参考关键词裁剪: %d -> %d（权重阈值 %.2f，数量上限 %d）",
+                len(keywords),
+                len(trimmed),
+                min_weight,
+                max_count,
+            )
+        return trimmed
+
     def get_all_keywords(self) -> Dict[str, float]:
         """
         获取所有关键词（主要关键词 + reference关键词）的合并字典。
@@ -437,6 +471,8 @@ class KeywordAgent:
         else:
             reference_keywords = {}
             logger.info("Reference关键词提取已关闭；仅使用主要关键词。")
+
+        reference_keywords = self._trim_reference_keywords(reference_keywords)
 
         # 合并（主要关键词优先，不会被覆盖）
         negative_keys = set()

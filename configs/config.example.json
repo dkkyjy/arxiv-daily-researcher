@@ -62,6 +62,8 @@
     "enable_reference_extraction": true,
     "auto_archive_qualified_pdfs": false,
     "reference_pdf_max_files": 0,
+    "reference_keyword_min_weight": 0.0,
+    "reference_keyword_max_count": 0,
     "reference_keywords_config": {
       "max_keywords": 10,
       "similarity_threshold": 0.75,
