@@ -203,7 +203,32 @@ class KeywordAgent:
 
         失败时抛出异常，由调用方决定是否写入缓存（未写入则下次运行重试）。
         """
-        system_prompt = f"""你是一名研究助理。基于用户提供的学术论文摘录，提取真正核心的技术概念和术语。
+        ranked_mode = bool(getattr(settings, "REFERENCE_RANKED_LIST", False))
+        if ranked_mode:
+            system_prompt = f"""你是一名研究助理。基于用户提供的学术论文摘录，提取真正核心的技术概念和术语。
+
+研究背景:
+{settings.RESEARCH_CONTEXT if settings.RESEARCH_CONTEXT else "通用学术研究"}
+
+请按重要性**从高到低**输出一个关键词列表（最多 {settings.MAX_REFERENCE_KEYWORDS} 个）。
+
+**重要原则**：
+- 只提取真正核心和重要的关键词，不要为了凑数而提取不重要的内容
+- 关键词质量比数量更重要，可以少于上限
+- 关键词应按重要性排序，越靠前越重要
+
+要求：
+- 关键词应为专业术语或短语
+- 关键词应具体且有辨识度，能够代表论文的核心贡献
+- 避免过于宽泛的词汇（如"机器学习"、"人工智能"、"优化"等）
+- 优先使用英文术语
+- 避免提取相似或重复的关键词
+- 只提取与研究背景高度相关的核心概念
+
+输出格式: 仅输出JSON对象，形如 {{"keywords": ["term1", "term2"]}}，按重要性从高到低排列。
+"""
+        else:
+            system_prompt = f"""你是一名研究助理。基于用户提供的学术论文摘录，提取真正核心的技术概念和术语。
 
 研究背景:
 {settings.RESEARCH_CONTEXT if settings.RESEARCH_CONTEXT else "通用学术研究"}
@@ -266,6 +291,23 @@ class KeywordAgent:
 
         data = json.loads(content)
 
+        start = float(settings.REFERENCE_WEIGHT_HIGH)
+        floor = float(settings.REFERENCE_WEIGHT_LOW)
+        step = float(getattr(settings, "REFERENCE_WEIGHT_STEP", 0.0) or 0.0)
+        keywords: Dict[str, float] = {}
+
+        if ranked_mode:
+            # 单排序列表：LLM 已按重要性排序，直接按序号递减赋权。
+            ordered = [
+                kw
+                for kw in list(data.get("keywords", []))
+                if isinstance(kw, str) and kw.strip()
+            ][: max(0, int(settings.MAX_REFERENCE_KEYWORDS))]
+            effective_step = step if step > 0 else 0.1
+            for index, kw in enumerate(ordered):
+                keywords[kw] = round(max(floor, start - index * effective_step), 4)
+            return keywords
+
         def _clean(values, limit):
             return [
                 kw
@@ -277,13 +319,9 @@ class KeywordAgent:
         medium = _clean(data.get("medium_importance", []), settings.REFERENCE_COUNT_MEDIUM)
         low = _clean(data.get("low_importance", []), settings.REFERENCE_COUNT_LOW)
 
-        keywords: Dict[str, float] = {}
-        step = float(getattr(settings, "REFERENCE_WEIGHT_STEP", 0.0) or 0.0)
         if step > 0:
             # 按 高→中→低 顺序给每个关键词递减权重（如 1.0/0.9/0.8…），
             # 而不是每档同值；下限为低档权重。
-            start = float(settings.REFERENCE_WEIGHT_HIGH)
-            floor = float(settings.REFERENCE_WEIGHT_LOW)
             for index, kw in enumerate(high + medium + low):
                 keywords[kw] = round(max(floor, start - index * step), 4)
         else:

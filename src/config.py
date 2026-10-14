@@ -233,6 +233,8 @@ class Settings(BaseSettings):
     # 关键词按重要性顺序递减的权重间隔；>0 时启用连续档位（如 0.1 → 1.0/0.9/0.8…），
     # 0 = 三档各取同一权重（旧行为）。
     REFERENCE_WEIGHT_STEP: float = 0.0
+    # 参考词提取模式：False=三档（高/中/低），True=单排序列表（不分档）。
+    REFERENCE_RANKED_LIST: bool = False
 
     # 研究背景上下文
     RESEARCH_CONTEXT: str = ""
@@ -760,6 +762,10 @@ class Settings(BaseSettings):
                     self.REFERENCE_WEIGHT_STEP = 0.0
                 if self.REFERENCE_WEIGHT_STEP < 0:
                     self.REFERENCE_WEIGHT_STEP = 0.0
+
+                self.REFERENCE_RANKED_LIST = bool(
+                    kw_config.get("reference_ranked_list", False)
+                )
 
                 if "reference_keywords_config" in kw_config:
                     ref_cfg = kw_config["reference_keywords_config"]
