@@ -833,16 +833,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Reference weight step",
     },
     "reference_weight_step_help": {
-        "zh": "按重要性顺序每个关键词递减的权重（如 0.1 → 1.0/0.9/0.8…）而不是三档同值；0 = 保持三档固定权重。",
-        "en": "Decrease each keyword's weight along the importance order (0.1 → 1.0/0.9/0.8…), instead of equal weights per tier; 0 = keep the three fixed tier weights.",
-    },
-    "reference_ranked_list_label": {
-        "zh": "参考词用单排序列表（不分高/中/低）",
-        "en": "Use a single ranked list (no high/medium/low tiers)",
-    },
-    "reference_ranked_list_help": {
-        "zh": "让模型直接输出按重要性排序的关键词列表，数量上限用「最多关键词数量」；权重按 起点−序号×间隔 递减。",
-        "en": "Ask the model for one importance-ordered keyword list (capped by 'Max extracted keywords'); weights decrease by start - rank × step.",
+        "zh": "按重要性顺序每个关键词递减的权重（如 1.0/0.9/0.8…）；0 时使用默认 0.1。",
+        "en": "Decrease each keyword's weight along the importance order (e.g. 1.0/0.9/0.8…); 0 falls back to 0.1.",
     },
     "max_extracted_kws": {
         "zh": "最大提取关键词数",

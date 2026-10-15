@@ -64,8 +64,8 @@
     "reference_pdf_max_files": 0,
     "reference_keyword_min_weight": 0.0,
     "reference_keyword_max_count": 0,
-    "reference_weight_step": 0.0,
-    "reference_ranked_list": false,
+    "reference_weight_step": 0.1,
+    "reference_ranked_list": true,
     "reference_keywords_config": {
       "max_keywords": 10,
       "similarity_threshold": 0.75,
