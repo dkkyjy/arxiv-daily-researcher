@@ -217,7 +217,7 @@ class ArxivFetchTests(unittest.TestCase):
         self.assertEqual("failed", receipts[0]["status"])
         self.assertEqual("failed", domain["status"])
         self.assertIn("upstream unavailable", domain["error"])
-        self.assertEqual(4, domain["queries"]["submitted"]["attempts"])
+        self.assertEqual(5, domain["queries"]["submitted"]["attempts"])
 
     def test_scan_receipt_persistence_callback_failure_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -562,7 +562,7 @@ class ArxivRetryBackoffTests(unittest.TestCase):
         self.assertEqual(_arxiv_retry_wait(exc, 1), 60)
         self.assertEqual(_arxiv_retry_wait(exc, 2), 120)
         self.assertEqual(_arxiv_retry_wait(exc, 3), 240)
-        self.assertEqual(_arxiv_retry_wait(exc, 9), 480)
+        self.assertEqual(_arxiv_retry_wait(exc, 9), 900)
 
     def test_rate_limit_detection_accepts_plain_messages(self):
         from sources.arxiv_source import _is_rate_limit_error
@@ -570,12 +570,17 @@ class ArxivRetryBackoffTests(unittest.TestCase):
         self.assertTrue(_is_rate_limit_error(RuntimeError("HTTP Error 429: Too Many Requests")))
         self.assertFalse(_is_rate_limit_error(RuntimeError("HTTP Error 503: Service Unavailable")))
 
-    def test_generic_server_errors_back_off_linearly(self):
-        from sources.arxiv_source import _arxiv_retry_wait
+    def test_server_errors_back_off_exponentially(self):
+        from sources.arxiv_source import (
+            _arxiv_retry_wait,
+            _is_server_unavailable_error,
+        )
 
         exc = _http_error(503, "Service Unavailable")
-        self.assertEqual(_arxiv_retry_wait(exc, 1), 30)
-        self.assertEqual(_arxiv_retry_wait(exc, 3), 90)
+        self.assertTrue(_is_server_unavailable_error(exc))
+        self.assertEqual(_arxiv_retry_wait(exc, 1), 60)
+        self.assertEqual(_arxiv_retry_wait(exc, 3), 240)
+        self.assertEqual(_arxiv_retry_wait(exc, 9), 900)
 
     def test_retry_after_header_extends_the_wait(self):
         from sources.arxiv_source import _arxiv_retry_wait, _retry_after_seconds
@@ -589,7 +594,7 @@ class ArxivRetryBackoffTests(unittest.TestCase):
         from sources.arxiv_source import _arxiv_retry_wait
 
         exc = _http_error(429, "Too Many Requests", retry_after=3600)
-        self.assertEqual(_arxiv_retry_wait(exc, 1), 600)
+        self.assertEqual(_arxiv_retry_wait(exc, 1), 900)
 
     def test_missing_retry_after_returns_none(self):
         from sources.arxiv_source import _retry_after_seconds

@@ -115,6 +115,11 @@ def parse_args(argv: Optional[Sequence[str]] = None):
         default=None,
         help="[trend_research] 自定义深度分析提示词；不指定则使用配置文件或技能库内置指令",
     )
+    parser.add_argument(
+        "--skip-if-completed-today",
+        action="store_true",
+        help="[daily_research] 若今天已有成功的每日研究运行则直接跳过（供计划重试使用）",
+    )
     return parser.parse_args(argv)
 
 
@@ -219,6 +224,17 @@ def _backfill_date_range_from_args(args: argparse.Namespace) -> tuple[date, date
     if start < date(1991, 1, 1):
         raise ValueError("过去日报日期早于 arXiv 可用范围")
     return start, end
+
+
+def _daily_run_completed_today() -> bool:
+    """True when a completed daily run already exists for the local day."""
+    from datetime import datetime
+
+    from utils.daily_research_store import DailyResearchStore
+
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    store = DailyResearchStore(settings.DAILY_RESEARCH_DB_PATH)
+    return store.has_completed_daily_run_since(today_start)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -394,6 +410,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from modes.daily_research import DailyResearchPipeline
 
     with run_lock("daily_research"):
+        if args.skip_if_completed_today:
+            try:
+                if _daily_run_completed_today():
+                    logger.info("今天已有成功的每日研究运行，跳过本次计划重试。")
+                    return 0
+            except Exception as exc:
+                logger.warning("检查今日运行状态失败，继续执行: %s", exc)
         with daily_workflow_gate(
             logger=logger, wait_note="每日研究等待补充运行/过去日报完成"
         ):

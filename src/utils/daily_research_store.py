@@ -4038,6 +4038,19 @@ class DailyResearchStore:
                     scores[key] = total
         return scores
 
+    def has_completed_daily_run_since(self, since: datetime) -> bool:
+        """True when a completed daily run started at or after ``since``.
+
+        Lets a scheduled retry skip when the day's report was already produced.
+        """
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM daily_runs WHERE run_kind = 'daily' "
+                "AND status = 'completed' AND started_at >= ? LIMIT 1",
+                (since.isoformat(),),
+            ).fetchone()
+        return row is not None
+
     def collect_qualified_favorites(self) -> Dict[str, int]:
         """Add every already-qualified paper to 收藏 without replacing a reader mark.
 
