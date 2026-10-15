@@ -1370,20 +1370,6 @@ class DailyResearchPipeline:
             store.record_run_phase(run_id, "prepare")
             logger.info(f"每日研究 SQLite 状态库已启用: {settings.DAILY_RESEARCH_DB_PATH}")
 
-            # WebDAV is non-critical post-report maintenance. Retry old
-            # uploads before the long scan without letting a remote outage
-            # affect this run's paper identity or delivery state.
-            try:
-                sync_summary = deliver_pending_after_report_syncs(store, logger)
-                if sync_summary["claimed"]:
-                    logger.info(
-                        "已补发待处理 WebDAV 同步: 完成 %s，延后 %s",
-                        sync_summary["completed"],
-                        sync_summary["deferred"],
-                    )
-            except Exception as exc:
-                logger.warning("待补发 WebDAV 同步检查失败，将继续生成日报: %s", exc)
-
             # Notification retries are independent from the current paper scan.
             # Do this before processing so an old failed webhook is not delayed
             # by a long LLM run, and never affects whether a paper is "new".
@@ -1858,6 +1844,20 @@ class DailyResearchPipeline:
 
             if store and run_id:
                 store.set_run_total(run_id, total_papers_count)
+
+            # WebDAV is non-critical post-report maintenance. Retry old
+            # uploads only after the scan so a slow remote upload never
+            # delays the arXiv fetch (which is what faces rate limits).
+            try:
+                sync_summary = deliver_pending_after_report_syncs(store, logger)
+                if sync_summary["claimed"]:
+                    logger.info(
+                        "已补发待处理 WebDAV 同步: 完成 %s，延后 %s",
+                        sync_summary["completed"],
+                        sync_summary["deferred"],
+                    )
+            except Exception as exc:
+                logger.warning("待补发 WebDAV 同步检查失败，将继续生成日报: %s", exc)
 
             # ==================== 阶段4: 对所有论文评分 ====================
             logger.info(">>> 阶段4: 对所有论文进行加权评分...")
