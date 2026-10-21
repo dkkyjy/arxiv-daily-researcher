@@ -231,6 +231,8 @@ docker compose -f tests/docker-compose.yml ps
 
 报告按实际批次浏览。“其他报告”收录关键词趋势和历史维护生成的补充报告。可自动收藏评分通过的论文，也可在收藏页一次性收藏已有合格论文。
 
+每份日报除了 Markdown / HTML，还在 `data/reports/daily_research/manifest/` 写出同名的 JSON 清单，包含评分、匹配关键词、TL;DR、中文摘要和已归档 PDF 路径，供研究助手等外部工具直接读取，无需解析报告正文。
+
 ### 📜 历史维护
 
 | 操作 | 用途 |

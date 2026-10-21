@@ -37,6 +37,7 @@ from utils.deep_analysis_contract import (
 from utils.safe_url import safe_http_url
 from utils.text_language import has_chinese_text
 from utils.source_registry import source_display_names
+from .manifest import write_report_manifest
 from .modules.base_module import FormatHelper
 from .modules.renderers import ModuleRendererFactory
 
@@ -254,6 +255,24 @@ class Reporter:
                         f"[{source}] Markdown 报告生成失败 ({filepath}): {exc}"
                     ) from exc
                 logger.info(f"[{source}] Markdown 报告已生成: {filepath}")
+
+            # 机器可读清单：研究助手按 schema 1.0 消费；失败不影响报告交付
+            if report_kind != "supplement":
+                manifest_dir = self._report_directory(report_kind, "manifest", source)
+                manifest_path = manifest_dir / self._report_filename(
+                    source, timestamp, ".json", report_kind
+                )
+                try:
+                    write_report_manifest(
+                        manifest_path,
+                        source=source,
+                        papers=report_papers,
+                        generated_at=generated_at,
+                        report_kind=report_kind,
+                        markdown_path=report_paths.get(source),
+                    )
+                except Exception as exc:
+                    logger.warning(f"[{source}] 报告清单生成失败: {exc}")
 
             # 生成 HTML 报告（如果启用）
             if settings.ENABLE_HTML_REPORT:
