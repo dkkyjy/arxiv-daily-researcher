@@ -2741,7 +2741,36 @@ function paperCard(item) {
     item.strategy_id ? localeText(`策略：${item.strategy_id}`, `Strategy: ${item.strategy_id}`) : "",
   ].filter(Boolean).join(" ｜ ");
   const variants = (item.variants || []).map(sourceVariantCard).join("");
-  return `<details class="paper-card"><summary><span class="score-pill">${score}</span><strong>${badge} ${escapeHtml(item.title)}${preference}</strong><small>${escapeHtml(metadata)}</small></summary><div class="paper-content">${item.authors?.length ? `<p><strong>作者：</strong>${escapeHtml(item.authors.slice(0, 12).join(", "))}</p>` : ""}${item.tldr ? `<p><strong>TL;DR：</strong>${escapeHtml(item.tldr)}</p>` : ""}${(item.merged_keywords || item.extracted_keywords)?.length ? `<p><strong>合并关键词：</strong>${escapeHtml((item.merged_keywords || item.extracted_keywords).join(" · "))}</p>` : ""}${item.categories?.length ? `<p class="muted">${escapeHtml(localeText("分类：", "Categories: "))}${escapeHtml(item.categories.join(" "))}</p>` : ""}${url || pdfUrl ? `<p>${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">arXiv / 论文页面</a>` : ""}${url && pdfUrl ? " ｜ " : ""}${pdfUrl ? `<a href="${escapeAttribute(pdfUrl)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ""}</p>` : ""}${variants ? `<div class="paper-variants"><h3>来源变体</h3>${variants}</div>` : ""}</div></details>`;
+  return `<details class="paper-card"><summary><span class="score-pill">${score}</span><strong>${badge} ${escapeHtml(item.title)}${preference}</strong><small>${escapeHtml(metadata)}</small></summary><div class="paper-content">${item.authors?.length ? `<p><strong>作者：</strong>${escapeHtml(item.authors.slice(0, 12).join(", "))}</p>` : ""}${item.tldr ? `<p><strong>TL;DR：</strong>${escapeHtml(item.tldr)}</p>` : ""}${(item.merged_keywords || item.extracted_keywords)?.length ? `<p><strong>合并关键词：</strong>${escapeHtml((item.merged_keywords || item.extracted_keywords).join(" · "))}</p>` : ""}${item.categories?.length ? `<p class="muted">${escapeHtml(localeText("分类：", "Categories: "))}${escapeHtml(item.categories.join(" "))}</p>` : ""}${url || pdfUrl ? `<p>${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">arXiv / 论文页面</a>` : ""}${url && pdfUrl ? " ｜ " : ""}${pdfUrl ? `<a href="${escapeAttribute(pdfUrl)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ""}</p>` : ""}${manualIncludeControl(item)}${variants ? `<div class="paper-variants"><h3>来源变体</h3>${variants}</div>` : ""}</div></details>`;
+}
+
+function manualIncludeControl(item) {
+  const included = item.manual_include === true;
+  const label = included
+    ? localeText("取消强制纳入", "Remove manual inclusion")
+    : localeText("强制纳入", "Force include");
+  const help = included
+    ? localeText("已按合格论文处理；下次运行会重新分析并生成新报告。", "Treated as qualified; the next run re-analyses it and writes a new report.")
+    : localeText("评分没过但想读：标记后按合格论文处理，下次运行重新分析并生成新报告。", "Missed the threshold but worth reading: marking it treats the paper as qualified and lets the next run re-analyse it.");
+  const key = `${item.source || ""}|${item.paper_id || ""}`;
+  return `<p data-manual-include-row><button type="button" data-manual-include="${escapeAttribute(key)}" data-included="${included ? "1" : "0"}">${escapeHtml(label)}</button> <small>${escapeHtml(help)}</small></p>`;
+}
+
+function bindManualIncludeControls(root) {
+  $$("[data-manual-include]", root).forEach((button) => button.addEventListener("click", async () => {
+    const [source, paperId] = String(button.dataset.manualInclude || "").split("|");
+    const included = button.dataset.included !== "1";
+    try {
+      const saved = await api("/api/manual-inclusion", { method: "PUT", body: { source, paper_id: paperId, included } });
+      button.dataset.included = saved.manual_include ? "1" : "0";
+      button.textContent = saved.manual_include ? localeText("取消强制纳入", "Remove manual inclusion") : localeText("强制纳入", "Force include");
+      toast(saved.manual_include
+        ? localeText("已标记为强制纳入，下次运行重新分析这篇论文。", "Marked for manual inclusion; the next run re-analyses this paper.")
+        : localeText("已取消强制纳入。", "Manual inclusion removed."));
+    } catch (error) {
+      toast(localizedError(error), "error");
+    }
+  }));
 }
 
 async function renderPaperSearch(token) {
@@ -2788,6 +2817,7 @@ async function loadSearchResults(token) {
     const resultTitle = localeText(`检索结果（共 ${result.total} 篇匹配）`, `Search results (${result.total} matches)`);
     target.innerHTML = section(resultTitle, `${result.items?.length ? result.items.map(paperCard).join("") : '<p class="empty-state">没有匹配的论文。</p>'}${pager}`);
     applyLocale(target);
+    bindManualIncludeControls(target);
     $("#search-prev")?.addEventListener("click", () => { values.page -= 1; loadSearchResults(token); });
     $("#search-next")?.addEventListener("click", () => { values.page += 1; loadSearchResults(token); });
   } catch (error) {

@@ -1650,6 +1650,23 @@ def set_preference(payload: Mapping[str, Any]) -> dict[str, Any]:
     return {"ok": True, "preference": preference}
 
 
+def set_manual_inclusion(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Force one paper into the qualified set, or drop that mark."""
+    store = open_store()
+    if store is None:
+        raise ModernWebUIError("SQLite 数据库尚未创建。")
+    source = str(payload.get("source") or "").strip().lower()[:100]
+    paper_id = str(payload.get("paper_id") or "").strip()[:500]
+    if not source or not paper_id:
+        raise ModernWebUIError("论文来源和标识不能为空。")
+    included = _coerce_bool(payload.get("included", True))
+    try:
+        store.set_manual_inclusion(source, paper_id, included)
+    except (TypeError, ValueError) as exc:
+        raise ModernWebUIError(str(exc)) from exc
+    return {"ok": True, "manual_include": included}
+
+
 def learned_preference_terms() -> dict[str, list[dict[str, Any]]]:
     store = open_store()
     if store is None:

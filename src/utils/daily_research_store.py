@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from agents.analysis_agent import Stage2Response
     from sources.base_source import PaperMetadata
 
+from utils.manual_inclusion import MANUAL_INCLUSION_REASON
+
 
 # Learning-signal strengths for the learned preference scoring mode.  An
 # explicit like/dislike dominates; a legacy v1 pass contributes a mild positive
@@ -493,6 +495,21 @@ class DailyResearchStore:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_paper_preferences_updated "
                 "ON paper_preferences(updated_at)"
+            )
+
+            # Reader-chosen manual inclusions: a paper that missed the score
+            # threshold but is worth reading anyway. The row is the durable
+            # source of truth; scoring treats it as qualified and the queue
+            # lets it through the delivery ledger once more.
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS paper_manual_inclusions (
+                    source TEXT NOT NULL,
+                    paper_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (source, paper_id)
+                )
+                """
             )
 
             # Learned-preference evidence. Rows are upserted in place (never
@@ -4240,6 +4257,103 @@ class DailyResearchStore:
                     now,
                 )
 
+    # ==================== Manual inclusions ====================
+
+    def is_manually_included(self, source: str, paper_id: str) -> bool:
+        """True when the reader forced this paper into the qualified set."""
+        # Plain connection: this read also runs inside another
+        # ``with self._connect()`` block (paper search), where entering a
+        # second context would commit that outer transaction early.
+        row = self._connect().execute(
+            "SELECT 1 FROM paper_manual_inclusions "
+            "WHERE source = ? AND paper_id = ?",
+            (str(source), str(paper_id)),
+        ).fetchone()
+        return row is not None
+
+    def set_manual_inclusion(
+        self, source: str, paper_id: str, included: bool
+    ) -> bool:
+        """Mark or unmark one paper; marking re-queues it for a fresh report.
+
+        Marking promotes the stored score to qualified (keeping its numbers
+        intact so the report can show *why* it passed), clears
+        ``completed_at`` and retires the one delivery-ledger row of this
+        version, so the next run analyses and delivers the paper again.
+        Unmarking drops only the mark: an already rendered report stays a
+        historical fact.
+        """
+        normalized_source = str(source or "").strip().lower()
+        normalized_paper_id = str(paper_id or "").strip()
+        if not normalized_source or not normalized_paper_id:
+            raise ValueError("论文来源和标识不能为空。")
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            if not included:
+                conn.execute(
+                    "DELETE FROM paper_manual_inclusions "
+                    "WHERE source = ? AND paper_id = ?",
+                    (normalized_source, normalized_paper_id),
+                )
+                return False
+
+            conn.execute(
+                """
+                INSERT INTO paper_manual_inclusions (source, paper_id, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(source, paper_id) DO NOTHING
+                """,
+                (normalized_source, normalized_paper_id, now),
+            )
+            row = conn.execute(
+                "SELECT score_json, canonical_id, version FROM daily_papers "
+                "WHERE source = ? AND paper_id = ?",
+                (normalized_source, normalized_paper_id),
+            ).fetchone()
+            if row is None:
+                return True
+
+            score_json = row["score_json"]
+            if score_json:
+                try:
+                    payload = json.loads(score_json)
+                except (TypeError, ValueError):
+                    payload = None
+                if isinstance(payload, dict) and not payload.get("is_qualified"):
+                    payload["is_qualified"] = True
+                    payload["qualification_reason"] = MANUAL_INCLUSION_REASON
+                    score_json = json.dumps(payload, ensure_ascii=False)
+
+            conn.execute(
+                """
+                UPDATE daily_papers
+                SET score_json = ?, completed_at = NULL, last_error = NULL,
+                    queue_scope = 'daily', backfill_target_date = NULL,
+                    analysis_status = CASE
+                        WHEN analysis_status = 'succeeded' THEN analysis_status
+                        ELSE 'pending' END,
+                    analysis_json = CASE
+                        WHEN analysis_status = 'succeeded' THEN analysis_json
+                        ELSE NULL END
+                WHERE source = ? AND paper_id = ?
+                """,
+                (score_json, normalized_source, normalized_paper_id),
+            )
+            # Delivery is refused for an already delivered version, so the
+            # reader's explicit inclusion has to retire that one ledger row.
+            conn.execute(
+                """
+                DELETE FROM paper_deliveries
+                WHERE source = ? AND canonical_id = ? AND version = ?
+                """,
+                (
+                    normalized_source,
+                    row["canonical_id"] or normalized_paper_id,
+                    int(row["version"] or 0),
+                ),
+            )
+        return True
+
     @staticmethod
     def _preference_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
         def parse(raw: object) -> list[str]:
@@ -4710,6 +4824,10 @@ class DailyResearchStore:
                 row["merged_keywords_json"]
             ),
             "preference": preference,
+            "manual_include": self.is_manually_included(
+                str(representative.get("source") or ""),
+                str(representative.get("paper_id") or ""),
+            ),
             "variants": variants,
         }
 

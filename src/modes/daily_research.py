@@ -48,6 +48,7 @@ from utils.daily_research_store import (
 )
 from utils.llm_health import make_llm_health_recorder
 from utils.llm_resilience import is_retryable_llm_error
+from utils.manual_inclusion import force_manual_inclusion
 from utils.daily_research_errors import PaperStageError, paper_stage_error
 from utils.daily_research_fingerprints import (
     build_score_audit_metadata,
@@ -727,6 +728,8 @@ def _score_or_hydrate_paper(
                 )
             except Exception as exc:
                 raise _score_or_translate_stage_error("score", exc) from exc
+            if store is not None and store.is_manually_included(source, paper.paper_id):
+                score_response = force_manual_inclusion(score_response)
             scored = _score_single_paper(
                 paper,
                 source,
