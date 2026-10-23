@@ -182,8 +182,8 @@ class ReportPreviewInclusionTests(unittest.TestCase):
                 self.assertEqual(marked, {"2301.12345"})
 
 
-class ManualInclusionBackendTests(unittest.TestCase):
-    def test_backend_toggles_the_flag_for_one_paper(self):
+class PaperInterestBackendTests(unittest.TestCase):
+    def test_backend_writes_both_marks_and_clears_them_together(self):
         from unittest.mock import patch
 
         from modern_webui import backend
@@ -192,17 +192,45 @@ class ManualInclusionBackendTests(unittest.TestCase):
             store = DailyResearchStore(Path(temp_dir) / "daily.db")
             store.start_run(0)
             with patch.object(backend, "open_store", return_value=store):
-                saved = backend.set_manual_inclusion(
-                    {"source": "arxiv", "paper_id": "2301.12345", "included": True}
+                saved = backend.set_paper_interest(
+                    {
+                        "source": "arxiv",
+                        "paper_id": "2301.12345",
+                        "title": "A blazar paper",
+                        "interested": True,
+                    }
                 )
                 self.assertTrue(saved["manual_include"])
+                self.assertEqual(saved["preference"], "like")
                 self.assertTrue(store.is_manually_included("arxiv", "2301.12345"))
+                self.assertEqual(
+                    store.get_paper_preference("arxiv", "2301.12345")["preference"],
+                    "like",
+                )
 
-                saved = backend.set_manual_inclusion(
-                    {"source": "arxiv", "paper_id": "2301.12345", "included": False}
+                saved = backend.set_paper_interest(
+                    {"source": "arxiv", "paper_id": "2301.12345", "interested": False}
                 )
                 self.assertFalse(saved["manual_include"])
+                self.assertEqual(saved["preference"], "none")
                 self.assertFalse(store.is_manually_included("arxiv", "2301.12345"))
+
+    def test_backend_falls_back_to_stored_metadata_for_the_title(self):
+        from unittest.mock import patch
+
+        from modern_webui import backend
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            paper = _paper("2301.55555")
+            store.upsert_paper_seen(store.start_run(0), "arxiv", paper, {})
+            with patch.object(backend, "open_store", return_value=store):
+                backend.set_paper_interest(
+                    {"source": "arxiv", "paper_id": paper.paper_id, "interested": True}
+                )
+            row = store.get_paper_preference("arxiv", paper.paper_id)
+            self.assertEqual(row["title"], f"Title {paper.paper_id}")
 
     def test_backend_rejects_an_empty_identity(self):
         from unittest.mock import patch
@@ -211,7 +239,7 @@ class ManualInclusionBackendTests(unittest.TestCase):
 
         with patch.object(backend, "open_store", return_value=object()):
             with self.assertRaises(backend.ModernWebUIError):
-                backend.set_manual_inclusion({"source": "", "paper_id": ""})
+                backend.set_paper_interest({"source": "", "paper_id": ""})
 
 
 if __name__ == "__main__":

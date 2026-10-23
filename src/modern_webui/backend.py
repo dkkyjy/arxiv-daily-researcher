@@ -1650,21 +1650,59 @@ def set_preference(payload: Mapping[str, Any]) -> dict[str, Any]:
     return {"ok": True, "preference": preference}
 
 
-def set_manual_inclusion(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Force one paper into the qualified set, or drop that mark."""
-    store = open_store()
+def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Mark one paper as interesting: a favorite plus a forced inclusion.
+
+    A paper the reader cares about is both worth keeping (``like`` feeds the
+    favorites page and the learned library) and worth reading in full, so one
+    control writes both marks. Clearing removes both.
+    """
+    store = open_store(create=True)
     if store is None:
         raise ModernWebUIError("SQLite 数据库尚未创建。")
     source = str(payload.get("source") or "").strip().lower()[:100]
     paper_id = str(payload.get("paper_id") or "").strip()[:500]
     if not source or not paper_id:
         raise ModernWebUIError("论文来源和标识不能为空。")
-    included = _coerce_bool(payload.get("included", True))
+    interested = _coerce_bool(payload.get("interested", True))
+    authors = payload.get("authors") if isinstance(payload.get("authors"), list) else []
+    categories = (
+        payload.get("categories") if isinstance(payload.get("categories"), list) else []
+    )
+    title = str(payload.get("title") or "").strip()
+    canonical_id = str(payload.get("canonical_id") or "").strip()
+    version = payload.get("version")
+    if not title:
+        # Callers that only know the identity (search results, report cards)
+        # still get a self-contained preference row from the stored metadata.
+        record = store.get_paper_record(source, paper_id)
+        try:
+            meta = json.loads(record["paper_json"] or "{}")
+        except (IndexError, KeyError, TypeError, ValueError):
+            meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        title = str(meta.get("title") or "").strip() or paper_id
+        authors = authors or list(meta.get("authors") or [])
+        canonical_id = canonical_id or str(meta.get("canonical_id") or "")
+        if version in (None, ""):
+            version = meta.get("version")
     try:
-        store.set_manual_inclusion(source, paper_id, included)
+        store.set_paper_preference(
+            source,
+            paper_id,
+            preference="like" if interested else "none",
+            title=title[:4_000],
+            canonical_id=canonical_id[:500] or None,
+            version=int(version) if version not in (None, "") else None,
+            authors=[str(item)[:500] for item in authors[:100]],
+            categories=[str(item)[:100] for item in categories[:100]],
+        )
+        store.set_manual_inclusion(source, paper_id, interested)
     except (TypeError, ValueError) as exc:
         raise ModernWebUIError(str(exc)) from exc
-    return {"ok": True, "manual_include": included}
+    return {"ok": True, "interested": interested, "manual_include": interested,
+            "preference": "like" if interested else "none"}
 
 
 def learned_preference_terms() -> dict[str, list[dict[str, Any]]]:

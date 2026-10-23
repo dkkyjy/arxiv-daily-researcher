@@ -608,13 +608,11 @@ async def preference_put(request: Request) -> JSONResponse:
         raise _safe_error(exc) from exc
 
 
-async def manual_inclusion_put(request: Request) -> JSONResponse:
+async def paper_interest_put(request: Request) -> JSONResponse:
     _require_session(request)
     payload = await _payload(request)
     try:
-        return JSONResponse(
-            await _blocking_call(backend.set_manual_inclusion, payload)
-        )
+        return JSONResponse(await _blocking_call(backend.set_paper_interest, payload))
     except Exception as exc:
         raise _safe_error(exc) from exc
 
@@ -1061,7 +1059,7 @@ app = Starlette(
         Route("/api/favorites", favorites_get, methods=["GET"]),
         Route("/api/favorites/collect", favorites_collect, methods=["POST"]),
         Route("/api/preferences", preference_put, methods=["PUT"]),
-        Route("/api/manual-inclusion", manual_inclusion_put, methods=["PUT"]),
+        Route("/api/paper-interest", paper_interest_put, methods=["PUT"]),
         Route("/api/learned-preferences", learned_get, methods=["GET"]),
         Route("/api/extracted-keywords", extracted_keywords_get, methods=["GET"]),
         Route("/api/trend/templates", trend_templates_get, methods=["GET"]),
