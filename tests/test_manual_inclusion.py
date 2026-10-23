@@ -126,12 +126,60 @@ class ManualInclusionStoreTests(unittest.TestCase):
             payload = json.loads(store.get_paper_record("arxiv", paper.paper_id)["score_json"])
             self.assertTrue(payload["is_qualified"])
 
+    def test_report_rows_learn_which_papers_are_marked(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            marked = _paper("2301.11111")
+            plain = _paper("2301.22222")
+            self._seed_delivered_paper(store, marked)
+            store.set_manual_inclusion("arxiv", marked.paper_id, True)
+
+            rows = [{"source": "arxiv", "paper_id": marked.paper_id},
+                    {"source": "arxiv", "paper_id": plain.paper_id}]
+            self.assertEqual(
+                store.manual_inclusion_keys(rows),
+                {("arxiv", marked.paper_id)},
+            )
+            self.assertEqual(store.manual_inclusion_keys([]), set())
+
     def test_marking_requires_an_identity(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = DailyResearchStore(Path(temp_dir) / "daily.db")
             store.start_run(0)
             with self.assertRaises(ValueError):
                 store.set_manual_inclusion("", "2301.12345", True)
+
+
+class ReportPreviewInclusionTests(unittest.TestCase):
+    """The report preview decorates cards from ``/api/reports/<id>/papers``."""
+
+    def test_report_papers_carry_the_manual_include_flag(self):
+        from unittest.mock import patch
+
+        from modern_webui import backend
+
+        rows = [
+            {"source": "arxiv", "paper_id": "2301.12345", "title": "A", "authors": []},
+            {"source": "arxiv", "paper_id": "2301.99999", "title": "B", "authors": []},
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            with patch.object(backend, "_report_paper_rows", return_value=[dict(r) for r in rows]), patch.object(
+                backend, "open_store", return_value=store
+            ), patch.object(
+                backend, "report_file", return_value=(Path(temp_dir) / "r.html", "text/html")
+            ), patch.object(
+                backend, "_report_source", return_value="arxiv"
+            ):
+                before = backend.report_papers("token")
+                self.assertEqual([row["manual_include"] for row in before], [False, False])
+
+                store.set_manual_inclusion("arxiv", "2301.12345", True)
+                after = backend.report_papers("token")
+                marked = {row["paper_id"] for row in after if row["manual_include"]}
+                self.assertEqual(marked, {"2301.12345"})
 
 
 class ManualInclusionBackendTests(unittest.TestCase):

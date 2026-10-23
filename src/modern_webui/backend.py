@@ -2918,10 +2918,15 @@ def report_papers(token: str) -> list[dict[str, Any]]:
     store = open_store(create=True)
     rows = _report_paper_rows(path, source)
     preferences = store.get_preference_map(rows) if store is not None and rows else {}
+    flagged = store.manual_inclusion_keys(rows) if store is not None and rows else set()
     for row in rows:
         row["preference"] = preferences.get(
             (str(row["source"]), str(row["paper_id"])), "none"
         )
+        row["manual_include"] = (
+            str(row["source"]),
+            str(row["paper_id"]),
+        ) in flagged
     return rows
 
 

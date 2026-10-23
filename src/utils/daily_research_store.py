@@ -4271,6 +4271,22 @@ class DailyResearchStore:
         ).fetchone()
         return row is not None
 
+    def manual_inclusion_keys(
+        self, papers: Iterable[Dict[str, Any]]
+    ) -> set[Tuple[str, str]]:
+        """Return which of the given papers carry a manual-inclusion mark."""
+        wanted = {
+            (str(paper.get("source") or ""), str(paper.get("paper_id") or ""))
+            for paper in papers
+        }
+        wanted.discard(("", ""))
+        if not wanted:
+            return set()
+        rows = self._connect().execute(
+            "SELECT source, paper_id FROM paper_manual_inclusions"
+        ).fetchall()
+        return {(row["source"], row["paper_id"]) for row in rows} & wanted
+
     def set_manual_inclusion(
         self, source: str, paper_id: str, included: bool
     ) -> bool:
