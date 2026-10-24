@@ -2397,10 +2397,10 @@ function buildMarkedReportHtml(rawHtml, papers) {
   // the active labels into the injected script instead of leaving Chinese
   // tooltips behind in an otherwise English report view.
   const serializedLabels = JSON.stringify(state.language === "en"
-    ? { like: "Like", dislike: "Not interested", include: "Force include", includeShort: "+Include", includedShort: "\u2713Included" }
-    : { like: "喜欢", dislike: "不感兴趣", include: "强制纳入", includeShort: "\uff0b纳入", includedShort: "\u2713纳入" }).replaceAll("<", "\\u003c");
-  const style = '<style id="adr-report-mark-style">.adr-report-mark-bar{float:right;display:flex;gap:4px;margin-left:12px}.adr-report-mark-btn{border:1px solid rgba(127,127,127,.45);border-radius:8px;background:rgba(255,255,255,.78);cursor:pointer;font-size:13px;line-height:1;padding:4px 7px;color:inherit}.adr-report-mark-btn:hover{background:rgba(255,255,255,.95)}.adr-report-mark-btn.active[data-preference=like]{background:#16a34a;border-color:#16a34a;color:#fff}.adr-report-mark-btn.active[data-preference=dislike]{background:#dc2626;border-color:#dc2626;color:#fff}.adr-report-include-btn.active{border-color:#2f7d5d;color:#2f7d5d}</style>';
-  const script = `<script>(function(){if(window.__adrReportMarks)return;window.__adrReportMarks=true;var candidates=${serializedCandidates};var labels=${serializedLabels};function normalize(value){return String(value||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();}function interestButton(on){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn adr-report-include-btn'+(on?' active':'');item.dataset.included=on?'1':'0';item.title=labels.include;item.textContent=on?labels.includedShort:labels.includeShort;return item;}function button(preference,current){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn'+(preference===current?' active':'');item.dataset.preference=preference;item.title=labels[preference]||preference;item.textContent=preference==='like'?'👍':'👎';return item;}function set(bar,pref){pref=pref==='like'||pref==='dislike'?pref:'none';bar.dataset.current=pref;bar.querySelectorAll('.adr-report-mark-btn:not(.adr-report-include-btn)').forEach(function(item){item.classList.toggle('active',item.dataset.preference===pref);});}document.querySelectorAll('.revision-label').forEach(function(node){var text=normalize(node.textContent);if(/^v\\d+$/.test(text)||text==='↻ 重试')node.remove();});var used={};document.querySelectorAll('.card.pass,.card.fail').forEach(function(card){var cardText=normalize(card.textContent);var index=-1;for(var i=0;i<candidates.length;i+=1){if(!used[i]&&cardText.indexOf(normalize(candidates[i].title))!==-1){index=i;break;}}if(index<0)return;var field=card.querySelector('.field');if(!field)return;var paper=candidates[index];used[index]=true;var current=paper.preference==='like'||paper.preference==='dislike'?paper.preference:'none';var bar=document.createElement('div');bar.className='adr-report-mark-bar';bar.dataset.source=String(paper.source);bar.dataset.paperId=String(paper.paper_id);bar.dataset.current=current;if(card.classList.contains('fail')){bar.append(interestButton(paper.manual_include===true));bar.append(button('dislike',current));}else{bar.append(button('like',current));bar.append(button('dislike',current));if(paper.manual_include===true)bar.append(interestButton(true));}field.insertBefore(bar,field.firstChild);});window.addEventListener('message',function(event){var data=event.data||{};if(data.type==='adr-report-include-state'){document.querySelectorAll('.adr-report-include-btn').forEach(function(item){var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(bar.dataset.source!==String(data.source||'')||bar.dataset.paperId!==String(data.paper_id||''))return;item.dataset.included=data.included?'1':'0';item.classList.toggle('active',data.included===true);item.textContent=data.included?labels.includedShort:labels.includeShort;});return;}if(data.type!=='adr-report-mark-state')return;document.querySelectorAll('.adr-report-mark-bar').forEach(function(bar){if(bar.dataset.source===String(data.source||'')&&bar.dataset.paperId===String(data.paper_id||''))set(bar,data.preference);});});document.addEventListener('click',function(event){var item=event.target&&event.target.closest?event.target.closest('.adr-report-mark-btn'):null;if(!item)return;event.preventDefault();var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(item.classList.contains('adr-report-include-btn')){var next=item.dataset.included==='1'?'0':'1';item.dataset.included=next;item.classList.toggle('active',next==='1');item.textContent=next==='1'?labels.includedShort:labels.includeShort;parent.postMessage({type:'adr-report-include',source:bar.dataset.source,paper_id:bar.dataset.paperId,included:next==='1'},'*');return;}var wanted=item.dataset.preference===(bar.dataset.current||'none')?'none':item.dataset.preference;set(bar,wanted);parent.postMessage({type:'adr-report-mark',source:bar.dataset.source,paper_id:bar.dataset.paperId,preference:wanted},'*');});})();</script>`;
+    ? { like: "Like", dislike: "Not interested" }
+    : { like: "喜欢", dislike: "不感兴趣" }).replaceAll("<", "\\u003c");
+  const style = '<style id="adr-report-mark-style">.adr-report-mark-bar{float:right;display:flex;gap:4px;margin-left:12px}.adr-report-mark-btn{border:1px solid rgba(127,127,127,.45);border-radius:8px;background:rgba(255,255,255,.78);cursor:pointer;font-size:13px;line-height:1;padding:4px 7px;color:inherit}.adr-report-mark-btn:hover{background:rgba(255,255,255,.95)}.adr-report-mark-btn.active[data-preference=like]{background:#16a34a;border-color:#16a34a;color:#fff}.adr-report-mark-btn.active[data-preference=dislike]{background:#dc2626;border-color:#dc2626;color:#fff}</style>';
+  const script = `<script>(function(){if(window.__adrReportMarks)return;window.__adrReportMarks=true;var candidates=${serializedCandidates};var labels=${serializedLabels};function normalize(value){return String(value||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();}function button(preference,current){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn'+(preference===current?' active':'');item.dataset.preference=preference;item.title=labels[preference]||preference;item.textContent=preference==='like'?'👍':'👎';return item;}function set(bar,pref){pref=pref==='like'||pref==='dislike'?pref:'none';bar.dataset.current=pref;bar.querySelectorAll('.adr-report-mark-btn').forEach(function(item){item.classList.toggle('active',item.dataset.preference===pref);});}document.querySelectorAll('.revision-label').forEach(function(node){var text=normalize(node.textContent);if(/^v\\d+$/.test(text)||text==='↻ 重试')node.remove();});var used={};document.querySelectorAll('.card.pass,.card.fail').forEach(function(card){var cardText=normalize(card.textContent);var index=-1;for(var i=0;i<candidates.length;i+=1){if(!used[i]&&cardText.indexOf(normalize(candidates[i].title))!==-1){index=i;break;}}if(index<0)return;var field=card.querySelector('.field');if(!field)return;var paper=candidates[index];used[index]=true;var current=paper.preference==='like'||paper.preference==='dislike'?paper.preference:'none';var bar=document.createElement('div');bar.className='adr-report-mark-bar';bar.dataset.source=String(paper.source);bar.dataset.paperId=String(paper.paper_id);bar.dataset.current=current;bar.append(button('like',current),button('dislike',current));field.insertBefore(bar,field.firstChild);});window.addEventListener('message',function(event){var data=event.data||{};if(data.type!=='adr-report-mark-state')return;document.querySelectorAll('.adr-report-mark-bar').forEach(function(bar){if(bar.dataset.source===String(data.source||'')&&bar.dataset.paperId===String(data.paper_id||''))set(bar,data.preference);});});document.addEventListener('click',function(event){var item=event.target&&event.target.closest?event.target.closest('.adr-report-mark-btn'):null;if(!item)return;event.preventDefault();var bar=item.closest('.adr-report-mark-bar');if(!bar)return;var wanted=item.dataset.preference===(bar.dataset.current||'none')?'none':item.dataset.preference;set(bar,wanted);parent.postMessage({type:'adr-report-mark',source:bar.dataset.source,paper_id:bar.dataset.paperId,preference:wanted,failed:bar.parentElement&&bar.parentElement.closest('.card.fail')===bar.parentElement?false:!!event.target.closest('.card.fail')},'*');});})();</script>`;
   return {
     html: appendReportMarkup(appendReportMarkup(rawHtml, style, "head"), script, "body"),
     injected: true,
@@ -2588,37 +2588,11 @@ async function loadReportPreview(report, reports, token, chooseReport) {
       window.addEventListener("message", async function onReportMark(event) {
         if (event.source !== frame.contentWindow) return;
         const action = event.data || {};
-        if (!["adr-report-mark", "adr-report-include"].includes(action.type)) return;
+        if (action.type !== "adr-report-mark") return;
         const paper = (paperResponse.items || []).find((item) => String(item.source) === String(action.source || "") && String(item.paper_id) === String(action.paper_id || ""));
         if (!paper) return;
-        if (action.type === "adr-report-include") {
-          try {
-            const saved = await api("/api/paper-interest", { method: "PUT", body: { ...paper, interested: action.included === true } });
-            paper.manual_include = saved.manual_include === true;
-            paper.preference = saved.preference;
-            toast(paper.manual_include
-              ? localeText("已收藏并标记为感兴趣，下次运行重新分析这篇论文。", "Saved and marked as interested; the next run re-analyses this paper.")
-              : localeText("已取消感兴趣。", "Interest removed."));
-          } catch (error) {
-            toast(localizedError(error), "error");
-          }
-          frame.contentWindow?.postMessage({ type: "adr-report-include-state", source: paper.source, paper_id: paper.paper_id, included: paper.manual_include === true }, "*");
-          return;
-        }
         if (!["like", "dislike", "none"].includes(action.preference)) return;
-        if (action.preference === "dislike") {
-          await setPaperInterest(paper, "excluded", frame);
-          return;
-        }
-        try {
-          const saved = await api("/api/preferences", { method: "PUT", body: { ...paper, preference: action.preference } });
-          paper.preference = saved.preference;
-          frame.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: saved.preference }, "*");
-          toast("论文偏好已保存。 ");
-        } catch (error) {
-          frame.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: paper.preference || "none" }, "*");
-          toast(localizedError(error), "error");
-        }
+        await applyPreference(paper, action.preference, action.failed === true, frame);
       }, { signal: markAbortController.signal });
     }
   } catch (error) {
@@ -2760,53 +2734,67 @@ function paperCard(item) {
     item.strategy_id ? localeText(`策略：${item.strategy_id}`, `Strategy: ${item.strategy_id}`) : "",
   ].filter(Boolean).join(" ｜ ");
   const variants = (item.variants || []).map(sourceVariantCard).join("");
-  return `<details class="paper-card"><summary><span class="score-pill">${score}</span><strong>${badge} ${escapeHtml(item.title)}${preference}</strong><small>${escapeHtml(metadata)}</small></summary><div class="paper-content">${item.authors?.length ? `<p><strong>作者：</strong>${escapeHtml(item.authors.slice(0, 12).join(", "))}</p>` : ""}${item.tldr ? `<p><strong>TL;DR：</strong>${escapeHtml(item.tldr)}</p>` : ""}${(item.merged_keywords || item.extracted_keywords)?.length ? `<p><strong>合并关键词：</strong>${escapeHtml((item.merged_keywords || item.extracted_keywords).join(" · "))}</p>` : ""}${item.categories?.length ? `<p class="muted">${escapeHtml(localeText("分类：", "Categories: "))}${escapeHtml(item.categories.join(" "))}</p>` : ""}${url || pdfUrl ? `<p>${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">arXiv / 论文页面</a>` : ""}${url && pdfUrl ? " ｜ " : ""}${pdfUrl ? `<a href="${escapeAttribute(pdfUrl)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ""}</p>` : ""}${manualIncludeControl(item)}${variants ? `<div class="paper-variants"><h3>来源变体</h3>${variants}</div>` : ""}</div></details>`;
+  return `<details class="paper-card"><summary><span class="score-pill">${score}</span><strong>${badge} ${escapeHtml(item.title)}${preference}</strong><small>${escapeHtml(metadata)}</small></summary><div class="paper-content">${item.authors?.length ? `<p><strong>作者：</strong>${escapeHtml(item.authors.slice(0, 12).join(", "))}</p>` : ""}${item.tldr ? `<p><strong>TL;DR：</strong>${escapeHtml(item.tldr)}</p>` : ""}${(item.merged_keywords || item.extracted_keywords)?.length ? `<p><strong>合并关键词：</strong>${escapeHtml((item.merged_keywords || item.extracted_keywords).join(" · "))}</p>` : ""}${item.categories?.length ? `<p class="muted">${escapeHtml(localeText("分类：", "Categories: "))}${escapeHtml(item.categories.join(" "))}</p>` : ""}${url || pdfUrl ? `<p>${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">arXiv / 论文页面</a>` : ""}${url && pdfUrl ? " ｜ " : ""}${pdfUrl ? `<a href="${escapeAttribute(pdfUrl)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ""}</p>` : ""}${verdictControls(item)}${variants ? `<div class="paper-variants"><h3>来源变体</h3>${variants}</div>` : ""}</div></details>`;
 }
 
-async function setPaperInterest(paper, state, frame) {
+async function applyPreference(paper, preference, failed, frame) {
+  // 👍 on a paper that missed the threshold (or already carries an inclusion)
+  // means "worth reading in full", so it writes the interest pair; everywhere
+  // else 👍 stays a plain favorite and never re-queues a finished paper.
+  const useVerdict = preference === "dislike" || failed === true
+    || paper.manual_include === true || paper.excluded === true;
+  const state = preference === "dislike" ? "excluded" : preference === "like" ? "interested" : "none";
   try {
-    const saved = await api("/api/paper-interest", { method: "PUT", body: { ...paper, state } });
+    const saved = useVerdict
+      ? await api("/api/paper-interest", { method: "PUT", body: { ...paper, state } })
+      : await api("/api/preferences", { method: "PUT", body: { ...paper, preference } });
+    paper.preference = saved.preference || preference;
     paper.manual_include = saved.manual_include === true;
     paper.excluded = saved.excluded === true;
-    paper.preference = saved.preference;
-    frame?.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: saved.preference }, "*");
-    frame?.contentWindow?.postMessage({ type: "adr-report-include-state", source: paper.source, paper_id: paper.paper_id, included: saved.manual_include === true }, "*");
-    toast(saved.state === "interested"
-      ? localeText("已收藏并标记为感兴趣，下次运行重新分析这篇论文。", "Saved and marked as interested; the next run re-analyses this paper.")
-      : saved.state === "excluded"
-        ? localeText("已标记为不感兴趣：不再推荐、不做深度分析。", "Marked as not interested: no longer recommended and not analysed in depth.")
-        : localeText("已取消标记。", "Mark removed."));
+    frame?.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: paper.preference }, "*");
+    toast(saved.excluded
+      ? localeText("已标记为不感兴趣：不再推荐、不做深度分析。", "Marked as not interested: no longer recommended and not analysed in depth.")
+      : saved.manual_include
+        ? localeText("已收藏并标记为感兴趣，下次运行重新分析这篇论文。", "Saved and marked as interested; the next run re-analyses this paper.")
+        : paper.preference === "like"
+          ? localeText("论文偏好已保存。", "Paper preference saved.")
+          : localeText("已取消标记。", "Mark removed."));
+    return paper;
   } catch (error) {
     toast(localizedError(error), "error");
     frame?.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: paper.preference || "none" }, "*");
-    frame?.contentWindow?.postMessage({ type: "adr-report-include-state", source: paper.source, paper_id: paper.paper_id, included: paper.manual_include === true }, "*");
+    return null;
   }
-  return paper;
 }
 
-function manualIncludeControl(item) {
-  const included = item.manual_include === true;
-  // One control: "interested" both keeps the paper (like) and makes it count
-  // as qualified. Only papers that missed the threshold need it, and a marked
-  // paper keeps it so the mark stays reversible once it renders as qualified.
-  if (item.is_qualified !== false && !included) return "";
-  const label = included
-    ? localeText("取消感兴趣", "Remove interest")
-    : localeText("感兴趣", "Interested");
-  const help = included
-    ? localeText("已收藏并按合格论文处理；下次运行会重新分析并生成新报告。", "Saved as a favorite and treated as qualified; the next run re-analyses it and writes a new report.")
-    : localeText("评分没过但想读：标记后同时收藏并按合格论文处理，下次运行重新分析并生成新报告。", "Missed the threshold but worth reading: marking it saves the paper and treats it as qualified, and the next run re-analyses it.");
+function verdictControls(item) {
+  // Only papers that missed the threshold need a verdict; a marked paper keeps
+  // the controls so the mark stays reversible once it renders as qualified.
+  const marked = item.manual_include === true;
+  if (item.is_qualified !== false && !marked) return "";
   const key = `${item.source || ""}|${item.paper_id || ""}`;
-  return `<p data-manual-include-row><button type="button" data-manual-include="${escapeAttribute(key)}" data-included="${included ? "1" : "0"}">${escapeHtml(label)}</button> <small>${escapeHtml(help)}</small></p>`;
+  const flagged = item.is_qualified === false ? "1" : "0";
+  const liked = item.preference === "like" || marked;
+  const likes = liked ? "active" : "";
+  const dislikes = item.preference === "dislike" ? "active" : "";
+  return `<p data-verdict-row><button type="button" data-verdict="like" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${likes}" title="${escapeAttribute(localeText("感兴趣：收藏并按合格论文处理", "Interested: save and treat as qualified"))}">👍</button><button type="button" data-verdict="dislike" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${dislikes}" title="${escapeAttribute(localeText("不感兴趣：不再推荐、不做深度分析", "Not interested: no more recommendations or deep analysis"))}">👎</button></p>`;
 }
 
-function bindManualIncludeControls(root) {
-  $$("[data-manual-include]", root).forEach((button) => button.addEventListener("click", async () => {
-    const [source, paperId] = String(button.dataset.manualInclude || "").split("|");
-    const wanted = button.dataset.included !== "1";
-    const saved = await setPaperInterest({ source, paper_id: paperId }, wanted ? "interested" : "none");
-    button.dataset.included = saved.manual_include ? "1" : "0";
-    button.textContent = saved.manual_include ? localeText("取消感兴趣", "Remove interest") : localeText("感兴趣", "Interested");
+function bindVerdictControls(root) {
+  $$("[data-verdict]", root).forEach((button) => button.addEventListener("click", async () => {
+    const [source, paperId] = String(button.dataset.verdictKey || "").split("|");
+    const active = button.classList.contains("active");
+    const paper = {
+      source,
+      paper_id: paperId,
+      manual_include: button.dataset.verdictMarked === "1",
+      preference: active ? button.dataset.verdict : "none",
+    };
+    const saved = await applyPreference(paper, active ? "none" : button.dataset.verdict, button.dataset.verdictFailed === "1", null);
+    if (!saved) return;
+    $$("[data-verdict]", button.parentElement).forEach((other) => {
+      other.classList.toggle("active", other.dataset.verdict === saved.preference);
+    });
   }));
 }
 
@@ -2854,7 +2842,7 @@ async function loadSearchResults(token) {
     const resultTitle = localeText(`检索结果（共 ${result.total} 篇匹配）`, `Search results (${result.total} matches)`);
     target.innerHTML = section(resultTitle, `${result.items?.length ? result.items.map(paperCard).join("") : '<p class="empty-state">没有匹配的论文。</p>'}${pager}`);
     applyLocale(target);
-    bindManualIncludeControls(target);
+    bindVerdictControls(target);
     $("#search-prev")?.addEventListener("click", () => { values.page -= 1; loadSearchResults(token); });
     $("#search-next")?.addEventListener("click", () => { values.page += 1; loadSearchResults(token); });
   } catch (error) {
