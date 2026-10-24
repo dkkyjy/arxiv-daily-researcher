@@ -172,6 +172,9 @@ class WeightedScoreResponse(BaseModel):
     author_preference_bonus: float = 0.0
     ranking_score: Optional[float] = None
     qualification_reason: str = ""
+    # "include"/"exclude" when the reader overrode the LLM verdict; derived by
+    # the pipeline, never part of the prompt or the cache fingerprint.
+    reader_verdict: Optional[str] = None
     # ``learned_preference_v1`` only. Defaults keep hydration of rows written
     # by the other strategies fully backwards compatible.
     learned_adjustment: Optional[float] = None

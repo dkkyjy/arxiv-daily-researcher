@@ -2606,7 +2606,19 @@ async function renderFavorites(token) {
   const root = $("#page-root");
   root.innerHTML = `${pageHeader()}<div class="loading">正在读取收藏数据…</div>`;
   const data = await api("/api/favorites");
+  const excluded = await api("/api/excluded-papers").catch(() => ({ items: [] }));
   if (token !== state.renderToken) return;
+  // Every verdict stays visible and reversible: an exclusion you cannot find
+  // again is a black box.
+  const excludedRows = Array.isArray(excluded.items) ? excluded.items : [];
+  const excludedSection = excludedRows.length
+    ? section("已排除的论文", `<p>${escapeHtml(localeText("这些论文不会再被推荐，也不会做深度分析。点“取消排除”恢复。", "These papers are never recommended and not analysed in depth. Remove the exclusion to restore them."))}</p><div>${pagedTable("excluded-papers", [
+      { label: "排除时间", value: (row) => formatTime(row.created_at) },
+      { label: "论文", value: (row) => row.title || row.paper_id },
+      { label: "来源", value: (row) => row.source || "—" },
+      { label: "操作", html: (row) => `<button type="button" data-undo-exclude="${escapeAttribute(`${row.source}|${row.paper_id}`)}">${escapeHtml(localeText("取消排除", "Remove exclusion"))}</button>` },
+    ], excludedRows, { empty: "暂无排除的论文。" })}</div>`, { icon: "🚫" })
+    : "";
   const settingsCard = favoritesSettingsCard();
   if (!data.available) {
     root.innerHTML = `${pageHeader()}${section("收藏", '<p class="empty-state">SQLite 数据库尚未创建；运行一次每日研究或导入历史后即可查看。</p>', { icon: "⭐" })}${divider()}${settingsCard}`;
@@ -2614,7 +2626,7 @@ async function renderFavorites(token) {
     const likeCount = Number(data.counts?.like || 0);
     const dislikeCount = Number(data.counts?.dislike || 0);
     if (!likeCount && !dislikeCount) {
-      root.innerHTML = `${pageHeader()}${section("收藏", '<p class="empty-state">尚未标记论文。可直接在每日研究报告的论文卡片中使用 👍 或 👎。</p>', { icon: "⭐" })}${divider()}${settingsCard}`;
+      root.innerHTML = `${pageHeader()}${section("收藏", '<p class="empty-state">尚未标记论文。可直接在每日研究报告的论文卡片中使用 👍 或 👎。</p>', { icon: "⭐" })}${excludedSection}${divider()}${settingsCard}`;
     } else {
       const likedRows = Array.isArray(data.liked) ? data.liked : [];
       const paperTitle = (row) => {
@@ -2634,11 +2646,22 @@ async function renderFavorites(token) {
           { label: "论文标识", value: (row) => row.paper_id || "—" },
         ], likedRows, { empty: "暂无 👍 收藏论文。" })}</div>`
         : '<p class="empty-state">暂无 👍 收藏论文。</p>';
-      root.innerHTML = `${pageHeader()}${section("收藏的论文", `${metrics([{ label: "👍 收藏", value: formatNumber(likeCount), help: "正向偏好" }, { label: "👎 不喜欢", value: formatNumber(dislikeCount), help: "负向偏好" }])}${likedList}`, { icon: "⭐" })}${divider()}${section("收藏画像", `<div class="form-grid two"><div><p class="scroll-list-label">收藏作者 Top</p>${nativeScrollTable([{ label: "作者", key: "name" }, { label: "收藏次数", key: "count" }], data.authors || [], { empty: "暂无收藏作者统计", visibleRows: 10 })}</div><div><p class="scroll-list-label">收藏关键词</p>${nativeScrollTable([{ label: "关键词", key: "keyword" }, { label: "次数", key: "count" }], data.keywords || [], { empty: "暂无收藏关键词统计", visibleRows: 10 })}</div></div>`, { icon: "🧩" })}${divider()}${settingsCard}`;
+      root.innerHTML = `${pageHeader()}${section("收藏的论文", `${metrics([{ label: "👍 收藏", value: formatNumber(likeCount), help: "正向偏好" }, { label: "👎 不喜欢", value: formatNumber(dislikeCount), help: "负向偏好" }])}${likedList}`, { icon: "⭐" })}${divider()}${section("收藏画像", `<div class="form-grid two"><div><p class="scroll-list-label">收藏作者 Top</p>${nativeScrollTable([{ label: "作者", key: "name" }, { label: "收藏次数", key: "count" }], data.authors || [], { empty: "暂无收藏作者统计", visibleRows: 10 })}</div><div><p class="scroll-list-label">收藏关键词</p>${nativeScrollTable([{ label: "关键词", key: "keyword" }, { label: "次数", key: "count" }], data.keywords || [], { empty: "暂无收藏关键词统计", visibleRows: 10 })}</div></div>`, { icon: "🧩" })}${excludedSection}${divider()}${settingsCard}`;
     }
   }
   bindCommon(root);
   bindFavoriteActions(root);
+  bindExcludedActions(root);
+}
+
+function bindExcludedActions(root) {
+  $$("[data-undo-exclude]", root).forEach((button) => button.addEventListener("click", async () => {
+    const [source, paperId] = String(button.dataset.undoExclude || "").split("|");
+    button.disabled = true;
+    const saved = await applyPreference({ source, paper_id: paperId, excluded: true }, "none", false, null);
+    button.disabled = false;
+    if (saved) renderFavorites(state.renderToken);
+  }));
 }
 
 function favoritesSettingsCard() {
@@ -2743,7 +2766,11 @@ async function applyPreference(paper, preference, failed, frame) {
   // else 👍 stays a plain favorite and never re-queues a finished paper.
   const useVerdict = preference === "dislike" || failed === true
     || paper.manual_include === true || paper.excluded === true;
-  const state = preference === "dislike" ? "excluded" : preference === "like" ? "interested" : "none";
+  const state = preference === "dislike"
+    ? "excluded"
+    : preference === "like"
+      ? (failed === true || paper.manual_include === true ? "interested" : "favorite")
+      : "none";
   try {
     const saved = useVerdict
       ? await api("/api/paper-interest", { method: "PUT", body: { ...paper, state } })
@@ -2771,13 +2798,15 @@ function verdictControls(item) {
   // Only papers that missed the threshold need a verdict; a marked paper keeps
   // the controls so the mark stays reversible once it renders as qualified.
   const marked = item.manual_include === true;
-  if (item.is_qualified !== false && !marked) return "";
+  const excluded = item.excluded === true;
   const key = `${item.source || ""}|${item.paper_id || ""}`;
   const flagged = item.is_qualified === false ? "1" : "0";
-  const liked = item.preference === "like" || marked;
-  const likes = liked ? "active" : "";
-  const dislikes = item.preference === "dislike" ? "active" : "";
-  return `<p data-verdict-row><button type="button" data-verdict="like" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${likes}" title="${escapeAttribute(localeText("感兴趣：收藏并按合格论文处理", "Interested: save and treat as qualified"))}">👍</button><button type="button" data-verdict="dislike" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${dislikes}" title="${escapeAttribute(localeText("不感兴趣：不再推荐、不做深度分析", "Not interested: no more recommendations or deep analysis"))}">👎</button></p>`;
+  const likes = (item.preference === "like" || marked) ? "active" : "";
+  const dislikes = excluded || item.preference === "dislike" ? "active" : "";
+  // 👍 only appears where it can act: a paper that missed the threshold, or one
+  // that already carries a mark. 👎 is available for every paper.
+  const up = (item.is_qualified === false || marked) ? `<button type="button" data-verdict="like" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${likes}" title="${escapeAttribute(localeText("感兴趣：收藏并按合格论文处理", "Interested: save and treat as qualified"))}">👍</button>` : "";
+  return `<p data-verdict-row>${up}<button type="button" data-verdict="dislike" data-verdict-key="${escapeAttribute(key)}" data-verdict-failed="${flagged}" data-verdict-marked="${marked ? "1" : "0"}" class="${dislikes}" title="${escapeAttribute(localeText("不感兴趣：不再推荐、不做深度分析", "Not interested: no more recommendations or deep analysis"))}">👎</button></p>`;
 }
 
 function bindVerdictControls(root) {
@@ -2788,6 +2817,7 @@ function bindVerdictControls(root) {
       source,
       paper_id: paperId,
       manual_include: button.dataset.verdictMarked === "1",
+      excluded: button.dataset.verdict === "dislike" && active,
       preference: active ? button.dataset.verdict : "none",
     };
     const saved = await applyPreference(paper, active ? "none" : button.dataset.verdict, button.dataset.verdictFailed === "1", null);

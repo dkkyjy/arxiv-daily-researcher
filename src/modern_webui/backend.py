@@ -53,6 +53,7 @@ from utils.config_io import (
     write_env,
 )
 from utils.daily_research_store import DailyResearchStore
+from utils.manual_inclusion import override_keys
 from utils.run_lock import DatabaseRestoreBusyError, database_restore_activity_gate, is_lock_held
 from utils.source_registry import (
     OPENALEX_JOURNAL_CATALOG,
@@ -1665,10 +1666,9 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not source or not paper_id:
         raise ModernWebUIError("论文来源和标识不能为空。")
     state = str(payload.get("state") or "").strip().lower()
-    if state not in {"interested", "excluded", "none"}:
+    if state not in {"favorite", "interested", "excluded", "none"}:
         # Older controls only sent a boolean interest flag.
         state = "interested" if _coerce_bool(payload.get("interested", False)) else "none"
-    interested = state == "interested"
     authors = payload.get("authors") if isinstance(payload.get("authors"), list) else []
     categories = (
         payload.get("categories") if isinstance(payload.get("categories"), list) else []
@@ -1691,8 +1691,20 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
         canonical_id = canonical_id or str(meta.get("canonical_id") or "")
         if version in (None, ""):
             version = meta.get("version")
-    preference = {"interested": "like", "excluded": "dislike"}.get(state, "none")
+    # One verdict per paper: any 👍 clears an exclusion and any 👎 clears an
+    # inclusion, so "liked but excluded" cannot exist.
+    preference = {
+        "favorite": "like",
+        "interested": "like",
+        "excluded": "dislike",
+    }.get(state, "none")
     override = {"interested": "include", "excluded": "exclude"}.get(state)
+    keys = override_keys(
+        source=source,
+        paper_id=paper_id,
+        canonical_id=canonical_id or None,
+        arxiv_id=str(payload.get("arxiv_id") or payload.get("arxiv_canonical_id") or "") or None,
+    )
     try:
         store.set_paper_preference(
             source,
@@ -1704,7 +1716,7 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
             authors=[str(item)[:500] for item in authors[:100]],
             categories=[str(item)[:100] for item in categories[:100]],
         )
-        store.set_paper_override(source, paper_id, override)
+        store.set_paper_override(keys, override, source=source, paper_id=paper_id)
     except (TypeError, ValueError) as exc:
         raise ModernWebUIError(str(exc)) from exc
     return {
@@ -1714,6 +1726,17 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
         "manual_include": state == "interested",
         "excluded": state == "excluded",
     }
+
+
+def excluded_papers(limit: int = 200) -> dict[str, Any]:
+    """Return the papers the reader excluded, newest verdict first."""
+    store = open_store()
+    if store is None:
+        return {"available": False, "items": []}
+    try:
+        return {"available": True, "items": store.list_overrides("exclude", limit)}
+    except (TypeError, ValueError) as exc:
+        raise ModernWebUIError(str(exc)) from exc
 
 
 def learned_preference_terms() -> dict[str, list[dict[str, Any]]]:
@@ -2967,12 +2990,24 @@ def report_papers(token: str) -> list[dict[str, Any]]:
     store = open_store(create=True)
     rows = _report_paper_rows(path, source)
     preferences = store.get_preference_map(rows) if store is not None and rows else {}
-    overrides = store.paper_overrides(rows) if store is not None and rows else {}
+    verdicts = store.override_map() if store is not None and rows else {}
     for row in rows:
         key = (str(row["source"]), str(row["paper_id"]))
+        verdict = (
+            store.resolve_override(
+                verdicts,
+                override_keys(
+                    source=str(row["source"]),
+                    paper_id=str(row["paper_id"]),
+                    canonical_id=str(row.get("canonical_id") or ""),
+                ),
+            )
+            if store is not None
+            else None
+        )
         row["preference"] = preferences.get(key, "none")
-        row["manual_include"] = overrides.get(key) == "include"
-        row["excluded"] = overrides.get(key) == "exclude"
+        row["manual_include"] = verdict == "include"
+        row["excluded"] = verdict == "exclude"
     return rows
 
 

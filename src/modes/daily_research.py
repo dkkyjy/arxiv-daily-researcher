@@ -48,7 +48,11 @@ from utils.daily_research_store import (
 )
 from utils.llm_health import make_llm_health_recorder
 from utils.llm_resilience import is_retryable_llm_error
-from utils.manual_inclusion import force_manual_exclusion, force_manual_inclusion
+from utils.manual_inclusion import (
+    force_manual_exclusion,
+    force_manual_inclusion,
+    override_keys,
+)
 from utils.daily_research_errors import PaperStageError, paper_stage_error
 from utils.daily_research_fingerprints import (
     build_score_audit_metadata,
@@ -729,7 +733,14 @@ def _score_or_hydrate_paper(
             except Exception as exc:
                 raise _score_or_translate_stage_error("score", exc) from exc
             if store is not None:
-                override = store.paper_override(source, paper.paper_id)
+                override = store.paper_override(
+                    override_keys(
+                        source=source,
+                        paper_id=paper.paper_id,
+                        canonical_id=getattr(paper, "canonical_id", None),
+                        arxiv_id=getattr(paper, "arxiv_id", None),
+                    )
+                )
                 if override == "include":
                     score_response = force_manual_inclusion(score_response)
                 elif override == "exclude":

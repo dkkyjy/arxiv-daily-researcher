@@ -18,7 +18,7 @@ from config import PROJECT_ROOT, settings
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 
 def _arxiv_id(meta: Any, paper: Dict[str, Any]) -> str:
@@ -92,6 +92,10 @@ def _paper_record(paper: Dict[str, Any]) -> Dict[str, Any]:
         "score": score_value,
         "matched_keywords": matched,
         "qualified": bool(getattr(score, "is_qualified", False)),
+        # "include"/"exclude" when the reader overrode the LLM verdict, so a
+        # downstream consumer can keep an excluded paper out of its knowledge
+        # base while still archiving the report.
+        "verdict": getattr(score, "reader_verdict", None),
         "tldr": str(getattr(score, "tldr", "") or ""),
         "pdf": _archived_pdf(meta, paper_id),
     }

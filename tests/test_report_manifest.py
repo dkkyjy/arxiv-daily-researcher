@@ -60,7 +60,7 @@ class ReportManifestTests(unittest.TestCase):
             / "data/reports/daily_research/markdown/arxiv/ARXIV_Report_2026-10-20.md",
         )
 
-        self.assertEqual(manifest["schema"], "1.0")
+        self.assertEqual(manifest["schema"], "1.1")
         self.assertEqual(manifest["report"]["date"], "2026-10-20")
         self.assertEqual(manifest["report"]["source"], "arxiv")
         self.assertEqual(
@@ -80,6 +80,7 @@ class ReportManifestTests(unittest.TestCase):
         self.assertEqual(paper["tldr"], "中文 TL;DR")
         self.assertEqual(paper["doi"], "10.1103/PhysRevLett.1")
         self.assertIsNone(paper["pdf"])
+        self.assertIsNone(paper["verdict"])
 
     def test_manifest_points_at_archived_pdf_when_one_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:

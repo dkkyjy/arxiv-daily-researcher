@@ -13,8 +13,10 @@ from utils.daily_research_store import DailyResearchStore  # noqa: E402
 from utils.manual_inclusion import (  # noqa: E402
     MANUAL_EXCLUSION_REASON,
     MANUAL_INCLUSION_REASON,
+    REINCLUSION_REASON,
     force_manual_exclusion,
     force_manual_inclusion,
+    override_keys,
 )
 
 
@@ -98,13 +100,15 @@ class ManualInclusionStoreTests(unittest.TestCase):
             self._seed_delivered_paper(store, paper)
             self.assertTrue(store.is_paper_delivered("arxiv", paper.paper_id))
 
-            self.assertTrue(store.set_paper_override("arxiv", paper.paper_id, "include"))
+            self.assertTrue(store.set_paper_override(override_keys(source="arxiv", paper_id=paper.paper_id), "include", source="arxiv", paper_id=paper.paper_id))
 
-            self.assertEqual(store.paper_override("arxiv", paper.paper_id), "include")
+            self.assertEqual(store.paper_override(override_keys(source="arxiv", paper_id=paper.paper_id)), "include")
             record = store.get_paper_record("arxiv", paper.paper_id)
             payload = json.loads(record["score_json"])
             self.assertTrue(payload["is_qualified"])
-            self.assertEqual(payload["qualification_reason"], MANUAL_INCLUSION_REASON)
+            # The paper was already delivered, so the report says "re-included"
+            # instead of the plain "included" reason.
+            self.assertEqual(payload["qualification_reason"], REINCLUSION_REASON)
             self.assertIsNone(record["completed_at"])
             self.assertEqual(record["analysis_status"], "pending")
 
@@ -120,11 +124,18 @@ class ManualInclusionStoreTests(unittest.TestCase):
             store.start_run(0)
             paper = _paper("2301.12345")
             self._seed_delivered_paper(store, paper)
-            store.set_paper_override("arxiv", paper.paper_id, "include")
+            store.set_paper_override(override_keys(source="arxiv", paper_id=paper.paper_id), "include", source="arxiv", paper_id=paper.paper_id)
 
-            self.assertIsNone(store.set_paper_override("arxiv", paper.paper_id, None))
+            self.assertIsNone(
+                store.set_paper_override(
+                    override_keys(source="arxiv", paper_id=paper.paper_id),
+                    None,
+                    source="arxiv",
+                    paper_id=paper.paper_id,
+                )
+            )
 
-            self.assertIsNone(store.paper_override("arxiv", paper.paper_id))
+            self.assertIsNone(store.paper_override(override_keys(source="arxiv", paper_id=paper.paper_id)))
             payload = json.loads(store.get_paper_record("arxiv", paper.paper_id)["score_json"])
             self.assertTrue(payload["is_qualified"])
 
@@ -135,22 +146,29 @@ class ManualInclusionStoreTests(unittest.TestCase):
             marked = _paper("2301.11111")
             plain = _paper("2301.22222")
             self._seed_delivered_paper(store, marked)
-            store.set_paper_override("arxiv", marked.paper_id, "include")
+            store.set_paper_override(override_keys(source="arxiv", paper_id=marked.paper_id), "include", source="arxiv", paper_id=marked.paper_id)
 
             rows = [{"source": "arxiv", "paper_id": marked.paper_id},
                     {"source": "arxiv", "paper_id": plain.paper_id}]
+            verdicts = store.override_map()
             self.assertEqual(
-                store.paper_overrides(rows),
-                {("arxiv", marked.paper_id): "include"},
+                store.resolve_override(
+                    verdicts, override_keys(source="arxiv", paper_id=marked.paper_id)
+                ),
+                "include",
             )
-            self.assertEqual(store.paper_overrides([]), {})
+            self.assertIsNone(
+                store.resolve_override(
+                    verdicts, override_keys(source="arxiv", paper_id=plain.paper_id)
+                )
+            )
 
     def test_marking_requires_an_identity(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = DailyResearchStore(Path(temp_dir) / "daily.db")
             store.start_run(0)
             with self.assertRaises(ValueError):
-                store.set_paper_override("", "2301.12345", "include")
+                store.set_paper_override(override_keys(source="", paper_id="2301.12345"), "include", source="", paper_id="2301.12345")
 
 
 class ReportPreviewInclusionTests(unittest.TestCase):
@@ -178,10 +196,67 @@ class ReportPreviewInclusionTests(unittest.TestCase):
                 before = backend.report_papers("token")
                 self.assertEqual([row["manual_include"] for row in before], [False, False])
 
-                store.set_paper_override("arxiv", "2301.12345", "include")
+                store.set_paper_override(override_keys(source="arxiv", paper_id="2301.12345"), "include", source="arxiv", paper_id="2301.12345")
                 after = backend.report_papers("token")
                 marked = {row["paper_id"] for row in after if row["manual_include"]}
                 self.assertEqual(marked, {"2301.12345"})
+
+
+class OverrideIdentityTests(unittest.TestCase):
+    def test_verdict_follows_new_versions_and_mirrors(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            v2 = _paper("2301.12345v2")
+            store.upsert_paper_seen(store.start_run(0), "arxiv", v2, {})
+            store.set_paper_override(
+                override_keys(source="arxiv", paper_id=v2.paper_id),
+                "exclude",
+                source="arxiv",
+                paper_id=v2.paper_id,
+            )
+
+            # A later version has a different paper_id but the same identity.
+            self.assertEqual(
+                store.paper_override(
+                    override_keys(
+                        source="arxiv",
+                        paper_id="2301.12345v3",
+                        canonical_id="2301.12345",
+                    )
+                ),
+                "exclude",
+            )
+            # A journal mirror reaches the verdict through its arXiv alias only.
+            self.assertIsNone(
+                store.paper_override(
+                    override_keys(source="prl", paper_id="10.1103/PhysRevLett.1")
+                )
+            )
+            self.assertEqual(
+                store.paper_override(
+                    override_keys(
+                        source="prl",
+                        paper_id="10.1103/PhysRevLett.1",
+                        canonical_id="10.1103/PhysRevLett.1",
+                        arxiv_id="2301.12345",
+                    )
+                ),
+                "exclude",
+            )
+
+    def test_a_new_verdict_replaces_the_previous_one(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            paper = _paper("2301.12345")
+            store.upsert_paper_seen(store.start_run(0), "arxiv", paper, {})
+            keys = override_keys(source="arxiv", paper_id=paper.paper_id)
+
+            store.set_paper_override(keys, "exclude", source="arxiv", paper_id=paper.paper_id)
+            store.set_paper_override(keys, "include", source="arxiv", paper_id=paper.paper_id)
+            self.assertEqual(store.paper_override(keys), "include")
+            self.assertEqual(len(store.override_map()), 1)
 
 
 class ManualExclusionTests(unittest.TestCase):
@@ -208,7 +283,13 @@ class ManualExclusionTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                store.set_paper_override("arxiv", paper.paper_id, "exclude"), "exclude"
+                store.set_paper_override(
+                    override_keys(source="arxiv", paper_id=paper.paper_id),
+                    "exclude",
+                    source="arxiv",
+                    paper_id=paper.paper_id,
+                ),
+                "exclude",
             )
 
             record = store.get_paper_record("arxiv", paper.paper_id)
@@ -241,7 +322,7 @@ class ManualExclusionTests(unittest.TestCase):
                 self.assertEqual(saved["preference"], "dislike")
                 self.assertFalse(saved["manual_include"])
                 self.assertTrue(saved["excluded"])
-                self.assertEqual(store.paper_override("arxiv", "2301.88888"), "exclude")
+                self.assertEqual(store.paper_override(override_keys(source="arxiv", paper_id="2301.88888")), "exclude")
                 self.assertEqual(
                     store.get_paper_preference("arxiv", "2301.88888")["preference"],
                     "dislike",
@@ -268,7 +349,7 @@ class PaperInterestBackendTests(unittest.TestCase):
                 )
                 self.assertTrue(saved["manual_include"])
                 self.assertEqual(saved["preference"], "like")
-                self.assertEqual(store.paper_override("arxiv", "2301.12345"), "include")
+                self.assertEqual(store.paper_override(override_keys(source="arxiv", paper_id="2301.12345")), "include")
                 self.assertEqual(
                     store.get_paper_preference("arxiv", "2301.12345")["preference"],
                     "like",
@@ -279,7 +360,7 @@ class PaperInterestBackendTests(unittest.TestCase):
                 )
                 self.assertFalse(saved["manual_include"])
                 self.assertEqual(saved["preference"], "none")
-                self.assertIsNone(store.paper_override("arxiv", "2301.12345"))
+                self.assertIsNone(store.paper_override(override_keys(source="arxiv", paper_id="2301.12345")))
 
     def test_backend_falls_back_to_stored_metadata_for_the_title(self):
         from unittest.mock import patch
