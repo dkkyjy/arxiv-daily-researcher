@@ -54,3 +54,7 @@ Thumbs.db
 *~
 
 /docs/
+
+# local virtualenv and agent tooling state
+/venv312/
+/.omx/
