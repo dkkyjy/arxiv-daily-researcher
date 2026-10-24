@@ -1651,11 +1651,11 @@ def set_preference(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Mark one paper as interesting: a favorite plus a forced inclusion.
+    """Record the reader's verdict for one paper.
 
-    A paper the reader cares about is both worth keeping (``like`` feeds the
-    favorites page and the learned library) and worth reading in full, so one
-    control writes both marks. Clearing removes both.
+    ``interested`` favorites the paper and forces it into the qualified set;
+    ``excluded`` marks it disliked and keeps it out of recommendations,
+    favorites and deep analysis; ``none`` clears both marks.
     """
     store = open_store(create=True)
     if store is None:
@@ -1664,7 +1664,11 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
     paper_id = str(payload.get("paper_id") or "").strip()[:500]
     if not source or not paper_id:
         raise ModernWebUIError("论文来源和标识不能为空。")
-    interested = _coerce_bool(payload.get("interested", True))
+    state = str(payload.get("state") or "").strip().lower()
+    if state not in {"interested", "excluded", "none"}:
+        # Older controls only sent a boolean interest flag.
+        state = "interested" if _coerce_bool(payload.get("interested", False)) else "none"
+    interested = state == "interested"
     authors = payload.get("authors") if isinstance(payload.get("authors"), list) else []
     categories = (
         payload.get("categories") if isinstance(payload.get("categories"), list) else []
@@ -1687,22 +1691,29 @@ def set_paper_interest(payload: Mapping[str, Any]) -> dict[str, Any]:
         canonical_id = canonical_id or str(meta.get("canonical_id") or "")
         if version in (None, ""):
             version = meta.get("version")
+    preference = {"interested": "like", "excluded": "dislike"}.get(state, "none")
+    override = {"interested": "include", "excluded": "exclude"}.get(state)
     try:
         store.set_paper_preference(
             source,
             paper_id,
-            preference="like" if interested else "none",
+            preference=preference,
             title=title[:4_000],
             canonical_id=canonical_id[:500] or None,
             version=int(version) if version not in (None, "") else None,
             authors=[str(item)[:500] for item in authors[:100]],
             categories=[str(item)[:100] for item in categories[:100]],
         )
-        store.set_manual_inclusion(source, paper_id, interested)
+        store.set_paper_override(source, paper_id, override)
     except (TypeError, ValueError) as exc:
         raise ModernWebUIError(str(exc)) from exc
-    return {"ok": True, "interested": interested, "manual_include": interested,
-            "preference": "like" if interested else "none"}
+    return {
+        "ok": True,
+        "state": state,
+        "preference": preference,
+        "manual_include": state == "interested",
+        "excluded": state == "excluded",
+    }
 
 
 def learned_preference_terms() -> dict[str, list[dict[str, Any]]]:
@@ -2956,15 +2967,12 @@ def report_papers(token: str) -> list[dict[str, Any]]:
     store = open_store(create=True)
     rows = _report_paper_rows(path, source)
     preferences = store.get_preference_map(rows) if store is not None and rows else {}
-    flagged = store.manual_inclusion_keys(rows) if store is not None and rows else set()
+    overrides = store.paper_overrides(rows) if store is not None and rows else {}
     for row in rows:
-        row["preference"] = preferences.get(
-            (str(row["source"]), str(row["paper_id"])), "none"
-        )
-        row["manual_include"] = (
-            str(row["source"]),
-            str(row["paper_id"]),
-        ) in flagged
+        key = (str(row["source"]), str(row["paper_id"]))
+        row["preference"] = preferences.get(key, "none")
+        row["manual_include"] = overrides.get(key) == "include"
+        row["excluded"] = overrides.get(key) == "exclude"
     return rows
 
 

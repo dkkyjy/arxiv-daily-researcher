@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from agents.analysis_agent import Stage2Response
     from sources.base_source import PaperMetadata
 
-from utils.manual_inclusion import MANUAL_INCLUSION_REASON
+from utils.manual_inclusion import MANUAL_EXCLUSION_REASON, MANUAL_INCLUSION_REASON
 
 
 # Learning-signal strengths for the learned preference scoring mode.  An
@@ -497,19 +497,25 @@ class DailyResearchStore:
                 "ON paper_preferences(updated_at)"
             )
 
-            # Reader-chosen manual inclusions: a paper that missed the score
-            # threshold but is worth reading anyway. The row is the durable
-            # source of truth; scoring treats it as qualified and the queue
-            # lets it through the delivery ledger once more.
+            # Reader-chosen qualification verdicts: "include" forces a paper
+            # that missed the threshold into the qualified set, "exclude" keeps
+            # one out of recommendations and delivery. Both survive re-scoring.
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS paper_manual_inclusions (
+                CREATE TABLE IF NOT EXISTS paper_qualification_overrides (
                     source TEXT NOT NULL,
                     paper_id TEXT NOT NULL,
+                    override TEXT NOT NULL
+                        CHECK (override IN ('include', 'exclude')),
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (source, paper_id)
                 )
                 """
+            )
+            self._run_migration(
+                conn,
+                "qualification_overrides",
+                self._migrate_qualification_overrides,
             )
 
             # Learned-preference evidence. Rows are upserted in place (never
@@ -747,6 +753,25 @@ class DailyResearchStore:
                     ),
                 )
         return True
+
+    @staticmethod
+    def _migrate_qualification_overrides(conn: sqlite3.Connection) -> None:
+        """Move the first manual-inclusion table into the override table."""
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        if "paper_manual_inclusions" not in tables:
+            return
+        conn.execute(
+            "INSERT OR IGNORE INTO paper_qualification_overrides"
+            "(source, paper_id, override, created_at) "
+            "SELECT source, paper_id, 'include', created_at "
+            "FROM paper_manual_inclusions"
+        )
+        conn.execute("DROP TABLE paper_manual_inclusions")
 
     @staticmethod
     def _migrate_paper_queue_scope(conn):
@@ -4257,69 +4282,96 @@ class DailyResearchStore:
                     now,
                 )
 
-    # ==================== Manual inclusions ====================
+    # ==================== Qualification overrides ====================
 
-    def is_manually_included(self, source: str, paper_id: str) -> bool:
-        """True when the reader forced this paper into the qualified set."""
+    def paper_override(self, source: str, paper_id: str) -> Optional[str]:
+        """Return ``include``, ``exclude`` or ``None`` for one paper."""
         # Plain connection: this read also runs inside another
         # ``with self._connect()`` block (paper search), where entering a
         # second context would commit that outer transaction early.
         row = self._connect().execute(
-            "SELECT 1 FROM paper_manual_inclusions "
+            "SELECT override FROM paper_qualification_overrides "
             "WHERE source = ? AND paper_id = ?",
             (str(source), str(paper_id)),
         ).fetchone()
-        return row is not None
+        return str(row["override"]) if row is not None else None
 
-    def manual_inclusion_keys(
+    def paper_overrides(
         self, papers: Iterable[Dict[str, Any]]
-    ) -> set[Tuple[str, str]]:
-        """Return which of the given papers carry a manual-inclusion mark."""
+    ) -> Dict[Tuple[str, str], str]:
+        """Return the overrides that apply to the given papers."""
         wanted = {
             (str(paper.get("source") or ""), str(paper.get("paper_id") or ""))
             for paper in papers
         }
         wanted.discard(("", ""))
         if not wanted:
-            return set()
+            return {}
         rows = self._connect().execute(
-            "SELECT source, paper_id FROM paper_manual_inclusions"
+            "SELECT source, paper_id, override FROM paper_qualification_overrides"
         ).fetchall()
-        return {(row["source"], row["paper_id"]) for row in rows} & wanted
+        known = {(row["source"], row["paper_id"]): str(row["override"]) for row in rows}
+        return {key: known[key] for key in wanted if key in known}
 
-    def set_manual_inclusion(
-        self, source: str, paper_id: str, included: bool
-    ) -> bool:
-        """Mark or unmark one paper; marking re-queues it for a fresh report.
+    @staticmethod
+    def _score_json_with_override(raw: Optional[str], override: str) -> Optional[str]:
+        """Rewrite only the qualification verdict, keeping the scored numbers."""
+        if not raw:
+            return raw
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            return raw
+        if not isinstance(payload, dict):
+            return raw
+        wanted = override == "include"
+        if bool(payload.get("is_qualified")) == wanted:
+            return raw
+        payload["is_qualified"] = wanted
+        payload["qualification_reason"] = (
+            MANUAL_INCLUSION_REASON if wanted else MANUAL_EXCLUSION_REASON
+        )
+        return json.dumps(payload, ensure_ascii=False)
 
-        Marking promotes the stored score to qualified (keeping its numbers
-        intact so the report can show *why* it passed), clears
-        ``completed_at`` and retires the one delivery-ledger row of this
-        version, so the next run analyses and delivers the paper again.
-        Unmarking drops only the mark: an already rendered report stays a
-        historical fact.
+    def set_paper_override(
+        self, source: str, paper_id: str, override: Optional[str]
+    ) -> Optional[str]:
+        """Set or clear the reader's verdict for one paper.
+
+        ``include`` promotes the stored score to qualified, clears
+        ``completed_at`` and retires the delivery-ledger row of this version so
+        the next run analyses and delivers the paper again. ``exclude``
+        demotes the stored score instead, which keeps the paper out of
+        recommendations, favorites and deep analysis without re-delivering
+        anything. Clearing drops only the verdict: an already rendered report
+        stays a historical fact.
         """
         normalized_source = str(source or "").strip().lower()
         normalized_paper_id = str(paper_id or "").strip()
         if not normalized_source or not normalized_paper_id:
             raise ValueError("论文来源和标识不能为空。")
+        if override is not None and override not in ("include", "exclude"):
+            raise ValueError(f"invalid qualification override: {override!r}")
         now = datetime.now().isoformat()
         with self._connect() as conn:
-            if not included:
+            if override is None:
                 conn.execute(
-                    "DELETE FROM paper_manual_inclusions "
+                    "DELETE FROM paper_qualification_overrides "
                     "WHERE source = ? AND paper_id = ?",
                     (normalized_source, normalized_paper_id),
                 )
-                return False
+                return None
 
             conn.execute(
                 """
-                INSERT INTO paper_manual_inclusions (source, paper_id, created_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(source, paper_id) DO NOTHING
+                INSERT INTO paper_qualification_overrides (
+                    source, paper_id, override, created_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(source, paper_id) DO UPDATE SET
+                    override = excluded.override,
+                    created_at = excluded.created_at
                 """,
-                (normalized_source, normalized_paper_id, now),
+                (normalized_source, normalized_paper_id, override, now),
             )
             row = conn.execute(
                 "SELECT score_json, canonical_id, version FROM daily_papers "
@@ -4327,18 +4379,16 @@ class DailyResearchStore:
                 (normalized_source, normalized_paper_id),
             ).fetchone()
             if row is None:
-                return True
+                return override
 
-            score_json = row["score_json"]
-            if score_json:
-                try:
-                    payload = json.loads(score_json)
-                except (TypeError, ValueError):
-                    payload = None
-                if isinstance(payload, dict) and not payload.get("is_qualified"):
-                    payload["is_qualified"] = True
-                    payload["qualification_reason"] = MANUAL_INCLUSION_REASON
-                    score_json = json.dumps(payload, ensure_ascii=False)
+            score_json = self._score_json_with_override(row["score_json"], override)
+            if override == "exclude":
+                conn.execute(
+                    "UPDATE daily_papers SET score_json = ?, last_error = NULL "
+                    "WHERE source = ? AND paper_id = ?",
+                    (score_json, normalized_source, normalized_paper_id),
+                )
+                return override
 
             conn.execute(
                 """
@@ -4368,7 +4418,7 @@ class DailyResearchStore:
                     int(row["version"] or 0),
                 ),
             )
-        return True
+        return override
 
     @staticmethod
     def _preference_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
@@ -4840,10 +4890,10 @@ class DailyResearchStore:
                 row["merged_keywords_json"]
             ),
             "preference": preference,
-            "manual_include": self.is_manually_included(
+            "manual_include": self.paper_override(
                 str(representative.get("source") or ""),
                 str(representative.get("paper_id") or ""),
-            ),
+            ) == "include",
             "variants": variants,
         }
 

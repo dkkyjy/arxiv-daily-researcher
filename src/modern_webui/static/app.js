@@ -2396,12 +2396,11 @@ function buildMarkedReportHtml(rawHtml, papers) {
   // its small preference controls do not pass through ``applyLocale``. Pass
   // the active labels into the injected script instead of leaving Chinese
   // tooltips behind in an otherwise English report view.
-  const allowDislike = String(configValue("score_strategy", "")).trim().toLowerCase() === "learned_preference_v1";
   const serializedLabels = JSON.stringify(state.language === "en"
     ? { like: "Like", dislike: "Not interested", include: "Force include", includeShort: "+Include", includedShort: "\u2713Included" }
     : { like: "喜欢", dislike: "不感兴趣", include: "强制纳入", includeShort: "\uff0b纳入", includedShort: "\u2713纳入" }).replaceAll("<", "\\u003c");
   const style = '<style id="adr-report-mark-style">.adr-report-mark-bar{float:right;display:flex;gap:4px;margin-left:12px}.adr-report-mark-btn{border:1px solid rgba(127,127,127,.45);border-radius:8px;background:rgba(255,255,255,.78);cursor:pointer;font-size:13px;line-height:1;padding:4px 7px;color:inherit}.adr-report-mark-btn:hover{background:rgba(255,255,255,.95)}.adr-report-mark-btn.active[data-preference=like]{background:#16a34a;border-color:#16a34a;color:#fff}.adr-report-mark-btn.active[data-preference=dislike]{background:#dc2626;border-color:#dc2626;color:#fff}.adr-report-include-btn.active{border-color:#2f7d5d;color:#2f7d5d}</style>';
-  const script = `<script>(function(){if(window.__adrReportMarks)return;window.__adrReportMarks=true;var candidates=${serializedCandidates};var labels=${serializedLabels};var allowDislike=${allowDislike ? 'true' : 'false'};function normalize(value){return String(value||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();}function interestButton(on){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn adr-report-include-btn'+(on?' active':'');item.dataset.included=on?'1':'0';item.title=labels.include;item.textContent=on?labels.includedShort:labels.includeShort;return item;}function button(preference,current){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn'+(preference===current?' active':'');item.dataset.preference=preference;item.title=labels[preference]||preference;item.textContent=preference==='like'?'👍':'👎';return item;}function set(bar,pref){pref=pref==='like'||pref==='dislike'?pref:'none';bar.dataset.current=pref;bar.querySelectorAll('.adr-report-mark-btn:not(.adr-report-include-btn)').forEach(function(item){item.classList.toggle('active',item.dataset.preference===pref);});}document.querySelectorAll('.revision-label').forEach(function(node){var text=normalize(node.textContent);if(/^v\\d+$/.test(text)||text==='↻ 重试')node.remove();});var used={};document.querySelectorAll('.card.pass,.card.fail').forEach(function(card){var cardText=normalize(card.textContent);var index=-1;for(var i=0;i<candidates.length;i+=1){if(!used[i]&&cardText.indexOf(normalize(candidates[i].title))!==-1){index=i;break;}}if(index<0)return;var field=card.querySelector('.field');if(!field)return;var paper=candidates[index];used[index]=true;var current=paper.preference==='like'||paper.preference==='dislike'?paper.preference:'none';var bar=document.createElement('div');bar.className='adr-report-mark-bar';bar.dataset.source=String(paper.source);bar.dataset.paperId=String(paper.paper_id);bar.dataset.current=current;if(card.classList.contains('fail')){bar.append(interestButton(paper.manual_include===true));}else{bar.append(button('like',current));if(allowDislike)bar.append(button('dislike',current));if(paper.manual_include===true)bar.append(interestButton(true));}field.insertBefore(bar,field.firstChild);});window.addEventListener('message',function(event){var data=event.data||{};if(data.type==='adr-report-include-state'){document.querySelectorAll('.adr-report-include-btn').forEach(function(item){var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(bar.dataset.source!==String(data.source||'')||bar.dataset.paperId!==String(data.paper_id||''))return;item.dataset.included=data.included?'1':'0';item.classList.toggle('active',data.included===true);item.textContent=data.included?labels.includedShort:labels.includeShort;});return;}if(data.type!=='adr-report-mark-state')return;document.querySelectorAll('.adr-report-mark-bar').forEach(function(bar){if(bar.dataset.source===String(data.source||'')&&bar.dataset.paperId===String(data.paper_id||''))set(bar,data.preference);});});document.addEventListener('click',function(event){var item=event.target&&event.target.closest?event.target.closest('.adr-report-mark-btn'):null;if(!item)return;event.preventDefault();var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(item.classList.contains('adr-report-include-btn')){var next=item.dataset.included==='1'?'0':'1';item.dataset.included=next;item.classList.toggle('active',next==='1');item.textContent=next==='1'?labels.includedShort:labels.includeShort;parent.postMessage({type:'adr-report-include',source:bar.dataset.source,paper_id:bar.dataset.paperId,included:next==='1'},'*');return;}var wanted=item.dataset.preference===(bar.dataset.current||'none')?'none':item.dataset.preference;set(bar,wanted);parent.postMessage({type:'adr-report-mark',source:bar.dataset.source,paper_id:bar.dataset.paperId,preference:wanted},'*');});})();</script>`;
+  const script = `<script>(function(){if(window.__adrReportMarks)return;window.__adrReportMarks=true;var candidates=${serializedCandidates};var labels=${serializedLabels};function normalize(value){return String(value||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();}function interestButton(on){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn adr-report-include-btn'+(on?' active':'');item.dataset.included=on?'1':'0';item.title=labels.include;item.textContent=on?labels.includedShort:labels.includeShort;return item;}function button(preference,current){var item=document.createElement('button');item.type='button';item.className='adr-report-mark-btn'+(preference===current?' active':'');item.dataset.preference=preference;item.title=labels[preference]||preference;item.textContent=preference==='like'?'👍':'👎';return item;}function set(bar,pref){pref=pref==='like'||pref==='dislike'?pref:'none';bar.dataset.current=pref;bar.querySelectorAll('.adr-report-mark-btn:not(.adr-report-include-btn)').forEach(function(item){item.classList.toggle('active',item.dataset.preference===pref);});}document.querySelectorAll('.revision-label').forEach(function(node){var text=normalize(node.textContent);if(/^v\\d+$/.test(text)||text==='↻ 重试')node.remove();});var used={};document.querySelectorAll('.card.pass,.card.fail').forEach(function(card){var cardText=normalize(card.textContent);var index=-1;for(var i=0;i<candidates.length;i+=1){if(!used[i]&&cardText.indexOf(normalize(candidates[i].title))!==-1){index=i;break;}}if(index<0)return;var field=card.querySelector('.field');if(!field)return;var paper=candidates[index];used[index]=true;var current=paper.preference==='like'||paper.preference==='dislike'?paper.preference:'none';var bar=document.createElement('div');bar.className='adr-report-mark-bar';bar.dataset.source=String(paper.source);bar.dataset.paperId=String(paper.paper_id);bar.dataset.current=current;if(card.classList.contains('fail')){bar.append(interestButton(paper.manual_include===true));bar.append(button('dislike',current));}else{bar.append(button('like',current));bar.append(button('dislike',current));if(paper.manual_include===true)bar.append(interestButton(true));}field.insertBefore(bar,field.firstChild);});window.addEventListener('message',function(event){var data=event.data||{};if(data.type==='adr-report-include-state'){document.querySelectorAll('.adr-report-include-btn').forEach(function(item){var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(bar.dataset.source!==String(data.source||'')||bar.dataset.paperId!==String(data.paper_id||''))return;item.dataset.included=data.included?'1':'0';item.classList.toggle('active',data.included===true);item.textContent=data.included?labels.includedShort:labels.includeShort;});return;}if(data.type!=='adr-report-mark-state')return;document.querySelectorAll('.adr-report-mark-bar').forEach(function(bar){if(bar.dataset.source===String(data.source||'')&&bar.dataset.paperId===String(data.paper_id||''))set(bar,data.preference);});});document.addEventListener('click',function(event){var item=event.target&&event.target.closest?event.target.closest('.adr-report-mark-btn'):null;if(!item)return;event.preventDefault();var bar=item.closest('.adr-report-mark-bar');if(!bar)return;if(item.classList.contains('adr-report-include-btn')){var next=item.dataset.included==='1'?'0':'1';item.dataset.included=next;item.classList.toggle('active',next==='1');item.textContent=next==='1'?labels.includedShort:labels.includeShort;parent.postMessage({type:'adr-report-include',source:bar.dataset.source,paper_id:bar.dataset.paperId,included:next==='1'},'*');return;}var wanted=item.dataset.preference===(bar.dataset.current||'none')?'none':item.dataset.preference;set(bar,wanted);parent.postMessage({type:'adr-report-mark',source:bar.dataset.source,paper_id:bar.dataset.paperId,preference:wanted},'*');});})();</script>`;
   return {
     html: appendReportMarkup(appendReportMarkup(rawHtml, style, "head"), script, "body"),
     injected: true,
@@ -2607,6 +2606,10 @@ async function loadReportPreview(report, reports, token, chooseReport) {
           return;
         }
         if (!["like", "dislike", "none"].includes(action.preference)) return;
+        if (action.preference === "dislike") {
+          await setPaperInterest(paper, "excluded", frame);
+          return;
+        }
         try {
           const saved = await api("/api/preferences", { method: "PUT", body: { ...paper, preference: action.preference } });
           paper.preference = saved.preference;
@@ -2760,12 +2763,32 @@ function paperCard(item) {
   return `<details class="paper-card"><summary><span class="score-pill">${score}</span><strong>${badge} ${escapeHtml(item.title)}${preference}</strong><small>${escapeHtml(metadata)}</small></summary><div class="paper-content">${item.authors?.length ? `<p><strong>作者：</strong>${escapeHtml(item.authors.slice(0, 12).join(", "))}</p>` : ""}${item.tldr ? `<p><strong>TL;DR：</strong>${escapeHtml(item.tldr)}</p>` : ""}${(item.merged_keywords || item.extracted_keywords)?.length ? `<p><strong>合并关键词：</strong>${escapeHtml((item.merged_keywords || item.extracted_keywords).join(" · "))}</p>` : ""}${item.categories?.length ? `<p class="muted">${escapeHtml(localeText("分类：", "Categories: "))}${escapeHtml(item.categories.join(" "))}</p>` : ""}${url || pdfUrl ? `<p>${url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">arXiv / 论文页面</a>` : ""}${url && pdfUrl ? " ｜ " : ""}${pdfUrl ? `<a href="${escapeAttribute(pdfUrl)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ""}</p>` : ""}${manualIncludeControl(item)}${variants ? `<div class="paper-variants"><h3>来源变体</h3>${variants}</div>` : ""}</div></details>`;
 }
 
+async function setPaperInterest(paper, state, frame) {
+  try {
+    const saved = await api("/api/paper-interest", { method: "PUT", body: { ...paper, state } });
+    paper.manual_include = saved.manual_include === true;
+    paper.excluded = saved.excluded === true;
+    paper.preference = saved.preference;
+    frame?.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: saved.preference }, "*");
+    frame?.contentWindow?.postMessage({ type: "adr-report-include-state", source: paper.source, paper_id: paper.paper_id, included: saved.manual_include === true }, "*");
+    toast(saved.state === "interested"
+      ? localeText("已收藏并标记为感兴趣，下次运行重新分析这篇论文。", "Saved and marked as interested; the next run re-analyses this paper.")
+      : saved.state === "excluded"
+        ? localeText("已标记为不感兴趣：不再推荐、不做深度分析。", "Marked as not interested: no longer recommended and not analysed in depth.")
+        : localeText("已取消标记。", "Mark removed."));
+  } catch (error) {
+    toast(localizedError(error), "error");
+    frame?.contentWindow?.postMessage({ type: "adr-report-mark-state", source: paper.source, paper_id: paper.paper_id, preference: paper.preference || "none" }, "*");
+    frame?.contentWindow?.postMessage({ type: "adr-report-include-state", source: paper.source, paper_id: paper.paper_id, included: paper.manual_include === true }, "*");
+  }
+  return paper;
+}
+
 function manualIncludeControl(item) {
   const included = item.manual_include === true;
   // One control: "interested" both keeps the paper (like) and makes it count
-  // as qualified, because a paper worth reading is worth reading in full.
-  // Only papers that missed the threshold need it; a marked paper keeps the
-  // control so the mark stays reversible once it renders as qualified.
+  // as qualified. Only papers that missed the threshold need it, and a marked
+  // paper keeps it so the mark stays reversible once it renders as qualified.
   if (item.is_qualified !== false && !included) return "";
   const label = included
     ? localeText("取消感兴趣", "Remove interest")
@@ -2780,17 +2803,10 @@ function manualIncludeControl(item) {
 function bindManualIncludeControls(root) {
   $$("[data-manual-include]", root).forEach((button) => button.addEventListener("click", async () => {
     const [source, paperId] = String(button.dataset.manualInclude || "").split("|");
-    const included = button.dataset.included !== "1";
-    try {
-      const saved = await api("/api/paper-interest", { method: "PUT", body: { source, paper_id: paperId, interested: included } });
-      button.dataset.included = saved.manual_include ? "1" : "0";
-      button.textContent = saved.manual_include ? localeText("取消感兴趣", "Remove interest") : localeText("感兴趣", "Interested");
-      toast(saved.manual_include
-        ? localeText("已收藏并标记为感兴趣，下次运行重新分析这篇论文。", "Saved and marked as interested; the next run re-analyses this paper.")
-        : localeText("已取消感兴趣。", "Interest removed."));
-    } catch (error) {
-      toast(localizedError(error), "error");
-    }
+    const wanted = button.dataset.included !== "1";
+    const saved = await setPaperInterest({ source, paper_id: paperId }, wanted ? "interested" : "none");
+    button.dataset.included = saved.manual_include ? "1" : "0";
+    button.textContent = saved.manual_include ? localeText("取消感兴趣", "Remove interest") : localeText("感兴趣", "Interested");
   }));
 }
 

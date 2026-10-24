@@ -11,7 +11,9 @@ from agents.analysis_agent import WeightedScoreResponse  # noqa: E402
 from sources.base_source import PaperMetadata  # noqa: E402
 from utils.daily_research_store import DailyResearchStore  # noqa: E402
 from utils.manual_inclusion import (  # noqa: E402
+    MANUAL_EXCLUSION_REASON,
     MANUAL_INCLUSION_REASON,
+    force_manual_exclusion,
     force_manual_inclusion,
 )
 
@@ -96,9 +98,9 @@ class ManualInclusionStoreTests(unittest.TestCase):
             self._seed_delivered_paper(store, paper)
             self.assertTrue(store.is_paper_delivered("arxiv", paper.paper_id))
 
-            self.assertTrue(store.set_manual_inclusion("arxiv", paper.paper_id, True))
+            self.assertTrue(store.set_paper_override("arxiv", paper.paper_id, "include"))
 
-            self.assertTrue(store.is_manually_included("arxiv", paper.paper_id))
+            self.assertEqual(store.paper_override("arxiv", paper.paper_id), "include")
             record = store.get_paper_record("arxiv", paper.paper_id)
             payload = json.loads(record["score_json"])
             self.assertTrue(payload["is_qualified"])
@@ -118,11 +120,11 @@ class ManualInclusionStoreTests(unittest.TestCase):
             store.start_run(0)
             paper = _paper("2301.12345")
             self._seed_delivered_paper(store, paper)
-            store.set_manual_inclusion("arxiv", paper.paper_id, True)
+            store.set_paper_override("arxiv", paper.paper_id, "include")
 
-            self.assertFalse(store.set_manual_inclusion("arxiv", paper.paper_id, False))
+            self.assertIsNone(store.set_paper_override("arxiv", paper.paper_id, None))
 
-            self.assertFalse(store.is_manually_included("arxiv", paper.paper_id))
+            self.assertIsNone(store.paper_override("arxiv", paper.paper_id))
             payload = json.loads(store.get_paper_record("arxiv", paper.paper_id)["score_json"])
             self.assertTrue(payload["is_qualified"])
 
@@ -133,22 +135,22 @@ class ManualInclusionStoreTests(unittest.TestCase):
             marked = _paper("2301.11111")
             plain = _paper("2301.22222")
             self._seed_delivered_paper(store, marked)
-            store.set_manual_inclusion("arxiv", marked.paper_id, True)
+            store.set_paper_override("arxiv", marked.paper_id, "include")
 
             rows = [{"source": "arxiv", "paper_id": marked.paper_id},
                     {"source": "arxiv", "paper_id": plain.paper_id}]
             self.assertEqual(
-                store.manual_inclusion_keys(rows),
-                {("arxiv", marked.paper_id)},
+                store.paper_overrides(rows),
+                {("arxiv", marked.paper_id): "include"},
             )
-            self.assertEqual(store.manual_inclusion_keys([]), set())
+            self.assertEqual(store.paper_overrides([]), {})
 
     def test_marking_requires_an_identity(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = DailyResearchStore(Path(temp_dir) / "daily.db")
             store.start_run(0)
             with self.assertRaises(ValueError):
-                store.set_manual_inclusion("", "2301.12345", True)
+                store.set_paper_override("", "2301.12345", "include")
 
 
 class ReportPreviewInclusionTests(unittest.TestCase):
@@ -176,10 +178,74 @@ class ReportPreviewInclusionTests(unittest.TestCase):
                 before = backend.report_papers("token")
                 self.assertEqual([row["manual_include"] for row in before], [False, False])
 
-                store.set_manual_inclusion("arxiv", "2301.12345", True)
+                store.set_paper_override("arxiv", "2301.12345", "include")
                 after = backend.report_papers("token")
                 marked = {row["paper_id"] for row in after if row["manual_include"]}
                 self.assertEqual(marked, {"2301.12345"})
+
+
+class ManualExclusionTests(unittest.TestCase):
+    def test_exclusion_demotes_the_stored_score_without_re_queueing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            paper = _paper("2301.77777")
+            store.upsert_paper_seen(store.start_run(0), "arxiv", paper, {})
+            store.update_score(
+                "seed",
+                "arxiv",
+                {
+                    "paper_metadata": paper,
+                    "paper_id": paper.paper_id,
+                    "score_response": _score(True),
+                },
+            )
+            with store._connect() as conn:
+                conn.execute(
+                    "UPDATE daily_papers SET completed_at = '2026-10-23' "
+                    "WHERE source = 'arxiv' AND paper_id = ?",
+                    (paper.paper_id,),
+                )
+
+            self.assertEqual(
+                store.set_paper_override("arxiv", paper.paper_id, "exclude"), "exclude"
+            )
+
+            record = store.get_paper_record("arxiv", paper.paper_id)
+            payload = json.loads(record["score_json"])
+            self.assertFalse(payload["is_qualified"])
+            self.assertEqual(payload["qualification_reason"], MANUAL_EXCLUSION_REASON)
+            # Exclusion never re-queues: no re-analysis, no second delivery.
+            self.assertEqual(record["completed_at"], "2026-10-23")
+
+    def test_exclusion_survives_re_scoring(self):
+        forced = force_manual_exclusion(_score(True))
+        self.assertFalse(forced.is_qualified)
+        self.assertEqual(forced.qualification_reason, MANUAL_EXCLUSION_REASON)
+        already_out = _score(False)
+        self.assertIs(force_manual_exclusion(already_out), already_out)
+
+    def test_backend_records_the_exclusion_verdict(self):
+        from unittest.mock import patch
+
+        from modern_webui import backend
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = DailyResearchStore(Path(temp_dir) / "daily.db")
+            store.start_run(0)
+            with patch.object(backend, "open_store", return_value=store):
+                saved = backend.set_paper_interest(
+                    {"source": "arxiv", "paper_id": "2301.88888", "state": "excluded"}
+                )
+                self.assertEqual(saved["state"], "excluded")
+                self.assertEqual(saved["preference"], "dislike")
+                self.assertFalse(saved["manual_include"])
+                self.assertTrue(saved["excluded"])
+                self.assertEqual(store.paper_override("arxiv", "2301.88888"), "exclude")
+                self.assertEqual(
+                    store.get_paper_preference("arxiv", "2301.88888")["preference"],
+                    "dislike",
+                )
 
 
 class PaperInterestBackendTests(unittest.TestCase):
@@ -202,7 +268,7 @@ class PaperInterestBackendTests(unittest.TestCase):
                 )
                 self.assertTrue(saved["manual_include"])
                 self.assertEqual(saved["preference"], "like")
-                self.assertTrue(store.is_manually_included("arxiv", "2301.12345"))
+                self.assertEqual(store.paper_override("arxiv", "2301.12345"), "include")
                 self.assertEqual(
                     store.get_paper_preference("arxiv", "2301.12345")["preference"],
                     "like",
@@ -213,7 +279,7 @@ class PaperInterestBackendTests(unittest.TestCase):
                 )
                 self.assertFalse(saved["manual_include"])
                 self.assertEqual(saved["preference"], "none")
-                self.assertFalse(store.is_manually_included("arxiv", "2301.12345"))
+                self.assertIsNone(store.paper_override("arxiv", "2301.12345"))
 
     def test_backend_falls_back_to_stored_metadata_for_the_title(self):
         from unittest.mock import patch
