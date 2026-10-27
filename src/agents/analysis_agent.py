@@ -7,7 +7,7 @@ import threading
 import unicodedata
 import requests
 import fitz  # pymupdf
-from typing import Callable, Optional, Dict, Any, List, Mapping, Union
+from typing import Callable, Iterable, Optional, Dict, Any, List, Mapping, Union
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
@@ -46,6 +46,41 @@ from scoring_policy import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _keyword_key_norm(value: Any) -> str:
+    """Comparison key for a keyword, ignoring case, punctuation and acronyms.
+
+    Scoring models routinely expand or add an abbreviation
+    (``tidal disruption events`` -> ``tidal disruption events (TDEs)``), which
+    must not invalidate an otherwise complete answer.
+    """
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"[^0-9a-z\u4e00-\u9fff]+", " ", text)
+    return " ".join(text.split())
+
+
+def _remap_keyword_scores(
+    raw: Mapping[str, Any], expected: Iterable[str]
+) -> Dict[str, Any]:
+    """Point model-returned keyword keys at the configured spelling.
+
+    Unmatched keys stay in the result so the caller still rejects a genuinely
+    wrong answer instead of silently scoring zeros.
+    """
+    expected_keys = list(expected)
+    known = set(expected_keys)
+    by_norm: Dict[str, str] = {}
+    for key in expected_keys:
+        by_norm.setdefault(_keyword_key_norm(key), key)
+    mapped: Dict[str, Any] = {}
+    for key, value in raw.items():
+        target = key if key in known else by_norm.get(_keyword_key_norm(key))
+        if target is not None and target != key:
+            logger.debug("关键词键归一化: %r -> %r", key, target)
+        mapped[target if target is not None else key] = value
+    return mapped
 
 
 class ScoreValidationError(ValueError):
@@ -1079,6 +1114,9 @@ class AnalysisAgent:
                 raise ScoreValidationError("keyword_scores 必须是对象")
 
             expected_keywords = set(normalized_keywords) | set(negative_weights)
+            raw_keyword_scores = _remap_keyword_scores(
+                raw_keyword_scores, expected_keywords
+            )
             returned_keywords = set(raw_keyword_scores)
             missing_keywords = expected_keywords.difference(returned_keywords)
             unexpected_keywords = returned_keywords.difference(expected_keywords)
